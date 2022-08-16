@@ -1,0 +1,1 @@
+tensorboard --logdir ./checkpoints/dynamic_smooth_morph/gtsrb/log_dir --host 127.0.0.1 --port 6007

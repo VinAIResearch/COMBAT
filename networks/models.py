@@ -51,7 +51,7 @@ class Normalizer:
         elif(opt.dataset == 'mnist'):
             normalizer = Normalize(opt, [0.5], [0.5])
         elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba'):
-            normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]) #None
+            normalizer = None #normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]) #None
         else:
             raise Exception("Invalid dataset")
         return normalizer
@@ -72,7 +72,7 @@ class Denormalizer:
         elif(opt.dataset == 'mnist'):
             denormalizer = Denormalize(opt, [0.5], [0.5])
         elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba'):
-            denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]) #None
+            denormalizer = None #denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]) #None
         else: 
             raise Exception("Invalid dataset")
         return denormalizer
@@ -137,11 +137,11 @@ class AE(Module):
 
     def _get_denormalizer(self, opt):
         if(opt.dataset == 'cifar10'):
-            denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            denormalizer = Denormalize(opt, [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif(opt.dataset == 'mnist'):
             denormalizer = Denormalize(opt, [0.5], [0.5])
         elif(opt.dataset == 'gtsrb' or opt.dataset == 'celeba'):
-            denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            denormalizer = None
         else: 
             raise Exception("Invalid dataset")
         return denormalizer
@@ -149,189 +149,389 @@ class AE(Module):
 
     def _get_normalizer(self, opt):
         if(opt.dataset == 'cifar10'):
-            normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            normalizer = Normalize(opt, [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif(opt.dataset == 'mnist'):
             normalizer = Normalize(opt, [0.5], [0.5])
         elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba'):
-            normalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            normalizer = None
         else:
             raise Exception("Invalid dataset")
         return normalizer
     
 
-class GridGenerator(Module):
-    def __init__(self):
-        super(GridGenerator, self).__init__()
-        self.downsample = Encoder()
-        self.flatten = nn.Flatten()
-        self.linear1 = nn.Linear(48 * 4 * 4, 24 * 4 * 4)
-        self.linear2 = nn.Linear(24 * 4 * 4, 2 * 8 * 8)
+# class GridGenerator(Module):
+#     def __init__(self):
+#         super(GridGenerator, self).__init__()
+#         self.downsample = Encoder()
+#         self.flatten = nn.Flatten()
+#         self.linear1 = nn.Linear(48 * 4 * 4, 24 * 4 * 4)
+#         self.linear2 = nn.Linear(24 * 4 * 4, 2 * 8 * 8)
+#         self.tanh = nn.Tanh()
+#
+#     def forward(self, x):
+#         x = self.downsample(x)
+#         x = self.flatten(x)
+#         x = self.linear2(self.linear1(x)).view(-1, 2, 8, 8)
+#         x = self.tanh(x)
+#         x = F.upsample(x, scale_factor=4, mode='bicubic').permute(0, 2, 3, 1)
+#         return x
+#
+#
+# class NoiseGenerator(nn.Sequential):
+#     def __init__(self, opt, in_channels = 8, steps = 3, channel_init=128):
+#         super(NoiseGenerator, self).__init__()
+#         self.steps = steps
+#         channel_current = in_channels
+#         channel_next = channel_init
+#         for step in range(steps):
+#             self.add_module('upsample_{}'.format(step), nn.Upsample(scale_factor=(2, 2), mode='bilinear'))
+#             self.add_module('convblock_up_{}'.format(2 * step), Conv2dBlock(channel_current, channel_current))
+#             self.add_module('convblock_up_{}'.format(2 * step + 1), Conv2dBlock(channel_current, channel_next))
+#             channel_current = channel_next
+#             channel_next = channel_next // 2
+#         self.add_module('convblock_up_{}'.format(2 * steps), Conv2dBlock(channel_current, 2, relu=False))
+#
+#     def forward(self, x):
+#         for module in self.children():
+#             x = module(x)
+#         x = nn.Tanh()(x)
+#         return x
+
+
+class UnetGenerator_bk(Module):
+    def __init__(self, opt, in_channels = 3, nf=64, use_bias=True):
+        super(UnetGenerator_bk, self).__init__()
+        self.act = nn.LeakyReLU(0.2, True)
+        self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        #self.bn0_0 = nn.InstanceNorm2d(nf)
+        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn0_1 = nn.InstanceNorm2d(nf)
+        self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn1_0 = nn.InstanceNorm2d(nf*2)
+        self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn1_1 = nn.InstanceNorm2d(nf*2)
+        self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn2_0 = nn.InstanceNorm2d(nf*4)
+        self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn2_1 = nn.InstanceNorm2d(nf*4)
+        self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn3_0 = nn.InstanceNorm2d(nf*8)
+        self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn3_1 = nn.InstanceNorm2d(nf*8)
+
+        # self.upconv3_2 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn3_2 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_1 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_0 = nn.InstanceNorm2d(nf*4)
+        # self.upconv2_2 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn2_2 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_1 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_0 = nn.InstanceNorm2d(nf*2)
+        # self.upconv1_2 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn1_2 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_1 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_0 = nn.InstanceNorm2d(nf)
+        # self.upconv0_2 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn0_2 = nn.InstanceNorm2d(nf)
+        self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn0_1 = nn.InstanceNorm2d(nf)
+        self.upconv0_0 = nn.Conv2d(nf, in_channels, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.do = nn.Dropout(p=0.3)
         self.tanh = nn.Tanh()
 
     def forward(self, x):
-        x = self.downsample(x)
-        x = self.flatten(x)
-        x = self.linear2(self.linear1(x)).view(-1, 2, 8, 8)
-        x = self.tanh(x)
-        x = F.upsample(x, scale_factor=4, mode='bicubic').permute(0, 2, 3, 1)
-        return x
+        f0 = self.conv0_0(x)
+        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+        # f3 = self.do(f3)
 
+        # u3 = self.upbn3_2(self.upconv3_2(self.act(self.up(f3))))
+        u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
+        u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
+        # u2 = self.upbn2_2(self.upconv2_2(self.act(self.up(u3))))
+        u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
+        u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
+        # u1 = self.upbn1_2(self.upconv1_2(self.act(self.up(u2))))
+        u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
+        u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
+        # u0 = self.upbn0_2(self.upconv0_2(self.act(self.up(u1))))
+        u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
+        u0 = torch.clamp(self.tanh(self.upconv0_0(self.act(u0))) * 0.08 + x, -1, 1)
+        return u0
 
-class NoiseGenerator(nn.Sequential):
-    def __init__(self, opt, in_channels = 8, steps = 3, channel_init=128):
-        super(NoiseGenerator, self).__init__()
-        self.steps = steps
-        channel_current = in_channels
-        channel_next = channel_init
-        for step in range(steps):
-            self.add_module('upsample_{}'.format(step), nn.Upsample(scale_factor=(2, 2), mode='bilinear'))
-            self.add_module('convblock_up_{}'.format(2 * step), Conv2dBlock(channel_current, channel_current))
-            self.add_module('convblock_up_{}'.format(2 * step + 1), Conv2dBlock(channel_current, channel_next))
-            channel_current = channel_next
-            channel_next = channel_next // 2
-        self.add_module('convblock_up_{}'.format(2 * steps), Conv2dBlock(channel_current, 2, relu=False))
+class UnetGenerator(Module):
+    def __init__(self, opt, in_channels = 3, nf=64, use_bias=True, out_channel=None):
+        super(UnetGenerator, self).__init__()
+        if out_channel is None:
+            out_channel = in_channels
+        self.act = nn.LeakyReLU(0.2, True)
+        self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        #self.bn0_0 = nn.InstanceNorm2d(nf)
+        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn0_1 = nn.InstanceNorm2d(nf)
+        self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn1_0 = nn.InstanceNorm2d(nf*2)
+        self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn1_1 = nn.InstanceNorm2d(nf*2)
+        self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn2_0 = nn.InstanceNorm2d(nf*4)
+        self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn2_1 = nn.InstanceNorm2d(nf*4)
+        self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn3_0 = nn.InstanceNorm2d(nf*8)
+        self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn3_1 = nn.InstanceNorm2d(nf*8)
+
+        # self.upconv3_2 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn3_2 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_1 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_0 = nn.InstanceNorm2d(nf*4)
+        # self.upconv2_2 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn2_2 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_1 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_0 = nn.InstanceNorm2d(nf*2)
+        # self.upconv1_2 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn1_2 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_1 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_0 = nn.InstanceNorm2d(nf)
+        # self.upconv0_2 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn0_2 = nn.InstanceNorm2d(nf)
+        self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn0_1 = nn.InstanceNorm2d(nf)
+        self.upconv0_0 = nn.Conv2d(nf, out_channel, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.do = nn.Dropout(p=0.3)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        for module in self.children():
-            x = module(x)
-        x = nn.Tanh()(x)
-        return x
+        f0 = self.conv0_0(x)
+        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+        # f3 = self.do(f3)
 
+        # u3 = self.upbn3_2(self.upconv3_2(self.act(self.up(f3))))
+        u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
+        u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
+        # u2 = self.upbn2_2(self.upconv2_2(self.act(self.up(u3))))
+        u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
+        u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
+        # u1 = self.upbn1_2(self.upconv1_2(self.act(self.up(u2))))
+        u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
+        u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
+        # u0 = self.upbn0_2(self.upconv0_2(self.act(self.up(u1))))
+        u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
+        u0 = self.tanh(self.upconv0_0(self.act(u0)))
+        return u0
 
-# class UnetGenerator(Module):
-#     def __init__(self, opt, in_channels = 3, nf=64, use_bias=True, l_inf=0.08):
-#         super(UnetGenerator, self).__init__()
-#         self.act = nn.LeakyReLU(0.2, True)
-#         self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
-#         self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
-#         #self.bn0_0 = nn.InstanceNorm2d(nf)
-#         self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.bn0_1 = nn.InstanceNorm2d(nf)
-#         self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=3, stride=2, padding=1, bias=use_bias)
-#         self.bn1_0 = nn.InstanceNorm2d(nf*2)
-#         self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.bn1_1 = nn.InstanceNorm2d(nf*2)
-#         self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=3, stride=2, padding=1, bias=use_bias)
-#         self.bn2_0 = nn.InstanceNorm2d(nf*4)
-#         self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.bn2_1 = nn.InstanceNorm2d(nf*4)
-#         self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=3, stride=2, padding=1, bias=use_bias)
-#         self.bn3_0 = nn.InstanceNorm2d(nf*8)
-#         self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.bn3_1 = nn.InstanceNorm2d(nf*8)
+class GridGenerator(Module):
+    def __init__(self, opt, in_channels = 3, nf=64, use_bias=True):
+        super(GridGenerator, self).__init__()
+        self.S = opt.s
+        self.act = nn.LeakyReLU(0.2, True)
+        self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        #self.bn0_0 = nn.InstanceNorm2d(nf)
+        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn0_1 = nn.InstanceNorm2d(nf)
+        self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn1_0 = nn.InstanceNorm2d(nf*2)
+        self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn1_1 = nn.InstanceNorm2d(nf*2)
+        self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn2_0 = nn.InstanceNorm2d(nf*4)
+        self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn2_1 = nn.InstanceNorm2d(nf*4)
+        self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn3_0 = nn.InstanceNorm2d(nf*8)
+        self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn3_1 = nn.InstanceNorm2d(nf*8)
 
-#         # self.upconv3_2 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         # self.upbn3_2 = nn.InstanceNorm2d(nf*8)
-#         self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn3_1 = nn.InstanceNorm2d(nf*8)
-#         self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn3_0 = nn.InstanceNorm2d(nf*4)
-#         # self.upconv2_2 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         # self.upbn2_2 = nn.InstanceNorm2d(nf*4)
-#         self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn2_1 = nn.InstanceNorm2d(nf*4)
-#         self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn2_0 = nn.InstanceNorm2d(nf*2)
-#         # self.upconv1_2 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         # self.upbn1_2 = nn.InstanceNorm2d(nf*2)
-#         self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn1_1 = nn.InstanceNorm2d(nf*2)
-#         self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn1_0 = nn.InstanceNorm2d(nf)
-#         # self.upconv0_2 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         # self.upbn0_2 = nn.InstanceNorm2d(nf)
-#         self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.upbn0_1 = nn.InstanceNorm2d(nf)
-#         self.upconv0_0 = nn.Conv2d(nf, in_channels, kernel_size=3, stride=1, padding=1, bias=use_bias)
-#         self.do = nn.Dropout(p=0.3)
-#         self.tanh = nn.Tanh()
+        self.fc1 = nn.Linear(nf * 8, nf)
+        self.fc2 = nn.Linear(nf, self.S*self.S*2)
+        # self.do = nn.Dropout(p=0.3)
+        self.tanh = nn.Tanh()
 
-#     def forward(self, x):
-#         f0 = self.conv0_0(x)
-#         f0 = self.bn0_1(self.conv0_1(self.act(f0)))
-#         f1 = self.bn1_0(self.conv1_0(self.act(f0)))
-#         f1 = self.bn1_1(self.conv1_1(self.act(f1)))
-#         f2 = self.bn2_0(self.conv2_0(self.act(f1)))
-#         f2 = self.bn2_1(self.conv2_1(self.act(f2)))
-#         f3 = self.bn3_0(self.conv3_0(self.act(f2)))
-#         f3 = self.bn3_1(self.conv3_1(self.act(f3)))
-#         # f3 = self.do(f3)
+    def forward(self, x):
+        f0 = self.conv0_0(x)
+        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+        f = F.adaptive_avg_pool2d(f3, 1).reshape((f3.shape[0],-1))
+        f = self.fc1(f)
+        f = self.fc2(self.act(f)).reshape((-1, 2, self.S, self.S))
+        f = self.tanh(f)
+        return f
 
-#         # u3 = self.upbn3_2(self.upconv3_2(self.act(self.up(f3))))
-#         u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
-#         u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
-#         # u2 = self.upbn2_2(self.upconv2_2(self.act(self.up(u3))))
-#         u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
-#         u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
-#         # u1 = self.upbn1_2(self.upconv1_2(self.act(self.up(u2))))
-#         u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
-#         u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
-#         # u0 = self.upbn0_2(self.upconv0_2(self.act(self.up(u1))))
-#         u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
-#         u0 = torch.clamp(self.tanh(self.upconv0_0(self.act(u0))) * l_inf + x, -1, 1)
+class MixedGenerator(Module):
+    def __init__(self, opt, in_channels = 3, nf=64, use_bias=True, out_channel=None):
+        super(MixedGenerator, self).__init__()
+        if out_channel is None:
+            out_channel = in_channels
+        self.S = opt.s
+        self.act = nn.LeakyReLU(0.2, True)
+        self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        #self.bn0_0 = nn.InstanceNorm2d(nf)
+        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn0_1 = nn.InstanceNorm2d(nf)
+        self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn1_0 = nn.InstanceNorm2d(nf*2)
+        self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn1_1 = nn.InstanceNorm2d(nf*2)
+        self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn2_0 = nn.InstanceNorm2d(nf*4)
+        self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn2_1 = nn.InstanceNorm2d(nf*4)
+        self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn3_0 = nn.InstanceNorm2d(nf*8)
+        self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn3_1 = nn.InstanceNorm2d(nf*8)
 
-#         return u0
+        self.fc1 = nn.Linear(nf * 8, nf)
+        self.fc2 = nn.Linear(nf, self.S*self.S*2)
+
+        # self.upconv3_2 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn3_2 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_1 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_0 = nn.InstanceNorm2d(nf*4)
+        # self.upconv2_2 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn2_2 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_1 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_0 = nn.InstanceNorm2d(nf*2)
+        # self.upconv1_2 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn1_2 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_1 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_0 = nn.InstanceNorm2d(nf)
+        # self.upconv0_2 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn0_2 = nn.InstanceNorm2d(nf)
+        self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn0_1 = nn.InstanceNorm2d(nf)
+        self.upconv0_0 = nn.Conv2d(nf, out_channel, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):
+        f0 = self.conv0_0(x)
+        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+        # f3 = self.do(f3)
+
+        # u3 = self.upbn3_2(self.upconv3_2(self.act(self.up(f3))))
+        u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
+        u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
+        # u2 = self.upbn2_2(self.upconv2_2(self.act(self.up(u3))))
+        u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
+        u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
+        # u1 = self.upbn1_2(self.upconv1_2(self.act(self.up(u2))))
+        u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
+        u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
+        # u0 = self.upbn0_2(self.upconv0_2(self.act(self.up(u1))))
+        u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
+        u0 = self.tanh(self.upconv0_0(self.act(u0)))
+
+        f = F.adaptive_avg_pool2d(f3, 1).reshape((f3.shape[0],-1))
+        f = self.fc1(f)
+        f = self.fc2(self.act(f)).reshape((-1, 2, self.S, self.S))
+        f = self.tanh(f)
+        return f, u0
 
 ### test3
-class UnetGenerator(Module):
-   def __init__(self, opt, in_channels = 3, nf=64, use_bias=True):
-       super(UnetGenerator, self).__init__()
-       self.act = nn.LeakyReLU(0.2, True)
-       self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
-       self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=4, stride=2, padding=1, bias=use_bias)
-       #self.bn0_0 = nn.InstanceNorm2d(nf)
-       self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.bn0_1 = nn.InstanceNorm2d(nf)
-       self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=4, stride=2, padding=1, bias=use_bias)
-       self.bn1_0 = nn.InstanceNorm2d(nf*2)
-       self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.bn1_1 = nn.InstanceNorm2d(nf*2)
-       self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=4, stride=2, padding=1, bias=use_bias)
-       self.bn2_0 = nn.InstanceNorm2d(nf*4)
-       self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.bn2_1 = nn.InstanceNorm2d(nf*4)
-       self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=4, stride=2, padding=1, bias=use_bias)
-       self.bn3_0 = nn.InstanceNorm2d(nf*8)
-       self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.bn3_1 = nn.InstanceNorm2d(nf*8)
+#class UnetGenerator(Module):
+#    def __init__(self, opt, in_channels = 3, nf=64, use_bias=True):
+#        super(UnetGenerator, self).__init__()
+#        self.act = nn.LeakyReLU(0.2, True)
+#        self.up = nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+#        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=4, stride=2, padding=1, bias=use_bias)
+#        #self.bn0_0 = nn.InstanceNorm2d(nf)
+#        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.bn0_1 = nn.InstanceNorm2d(nf)
+#        self.conv1_0 = nn.Conv2d(nf, nf*2, kernel_size=4, stride=2, padding=1, bias=use_bias)
+#        self.bn1_0 = nn.InstanceNorm2d(nf*2)
+#        self.conv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.bn1_1 = nn.InstanceNorm2d(nf*2)
+#        self.conv2_0 = nn.Conv2d(nf*2, nf*4, kernel_size=4, stride=2, padding=1, bias=use_bias)
+#        self.bn2_0 = nn.InstanceNorm2d(nf*4)
+#        self.conv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.bn2_1 = nn.InstanceNorm2d(nf*4)
+#        self.conv3_0 = nn.Conv2d(nf*4, nf*8, kernel_size=4, stride=2, padding=1, bias=use_bias)
+#        self.bn3_0 = nn.InstanceNorm2d(nf*8)
+#        self.conv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.bn3_1 = nn.InstanceNorm2d(nf*8)
 
-       self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn3_1 = nn.InstanceNorm2d(nf*8)
-       self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn3_0 = nn.InstanceNorm2d(nf*4)
-       self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn2_1 = nn.InstanceNorm2d(nf*4)
-       self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn2_0 = nn.InstanceNorm2d(nf*2)
-       self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn1_1 = nn.InstanceNorm2d(nf*2)
-       self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn1_0 = nn.InstanceNorm2d(nf)
-       self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.upbn0_1 = nn.InstanceNorm2d(nf)
-       self.upconv0_0 = nn.Conv2d(nf, in_channels, kernel_size=3, stride=1, padding=1, bias=use_bias)
-       self.tanh = nn.Tanh()
+#        self.upconv3_1 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn3_1 = nn.InstanceNorm2d(nf*8)
+#        self.upconv3_0 = nn.Conv2d(nf*8, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn3_0 = nn.InstanceNorm2d(nf*4)
+#        self.upconv2_1 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn2_1 = nn.InstanceNorm2d(nf*4)
+#        self.upconv2_0 = nn.Conv2d(nf*4, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn2_0 = nn.InstanceNorm2d(nf*2)
+#        self.upconv1_1 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn1_1 = nn.InstanceNorm2d(nf*2)
+#        self.upconv1_0 = nn.Conv2d(nf*2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn1_0 = nn.InstanceNorm2d(nf)
+#        self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.upbn0_1 = nn.InstanceNorm2d(nf)
+#        self.upconv0_0 = nn.Conv2d(nf, in_channels, kernel_size=3, stride=1, padding=1, bias=use_bias)
+#        self.tanh = nn.Tanh()
 
-   def forward(self, x):
-       f0 = self.conv0_0(x)
-       f0 = self.bn0_1(self.conv0_1(self.act(f0)))
-       f1 = self.bn1_0(self.conv1_0(self.act(f0)))
-       f1 = self.bn1_1(self.conv1_1(self.act(f1)))
-       f2 = self.bn2_0(self.conv2_0(self.act(f1)))
-       f2 = self.bn2_1(self.conv2_1(self.act(f2)))
-       f3 = self.bn3_0(self.conv3_0(self.act(f2)))
-       f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+#    def forward(self, x):
+#        f0 = self.conv0_0(x)
+#        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+#        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+#        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+#        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+#        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+#        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+#        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
 
-       u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
-       u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
-       u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
-       u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
-       u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
-       u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
-       u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
-       u0 = torch.clamp(self.tanh(self.upconv0_0(self.act(u0))) * 0.05 + x, -1, 1)
+#        u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
+#        u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
+#        u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
+#        u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
+#        u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
+#        u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
+#        u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
+#        u0 = torch.clamp(self.tanh(self.upconv0_0(self.act(u0))) * 0.05 + x, -1, 1)
 
-       return u0
+#        return u0
 
 #---------------------------- Classifiers ----------------------------#
 

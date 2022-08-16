@@ -21,26 +21,28 @@ def get_arguments():
 
     parser.add_argument('--bs', type=int, default=128)
     parser.add_argument('--lr_C', type=float, default=1e-2)
-    parser.add_argument('--lr_G', type=float, default=1e-3)
-    parser.add_argument('--schedulerG_milestones', type=list, default=[100, 200])
-    parser.add_argument('--schedulerC_milestones', type=list, default=[100, 200])
+    parser.add_argument('--lr_G', type=float, default=1e-2)
+    parser.add_argument('--schedulerG_milestones', type=list, default=[100, 200, 300])
+    parser.add_argument('--schedulerC_milestones', type=list, default=[100, 200, 300])
     parser.add_argument('--schedulerG_lambda', type=float, default=0.1)
     parser.add_argument('--schedulerC_lambda', type=float, default=0.1)
     parser.add_argument('--n_iters', type=int, default=300)
     parser.add_argument('--num_workers', type=float, default=6)
     parser.add_argument('--lambda_cov', type=float, default=1)
 
-    parser.add_argument('--lambda_grid', type=float, default=0.2)
+    parser.add_argument('--noise_rate', type=float, default=0.05)
     parser.add_argument('--target_label', type=int, default=0)
     parser.add_argument('--pc', type=float, default=0.1)
     parser.add_argument('--cross_rate', type=float, default=1)
+    parser.add_argument('--s', type=int, default=4)
+    parser.add_argument('--grid_rescale', type=float, default=0.15)
+
 
     parser.add_argument('--random_rotation', type=int, default=10)
     parser.add_argument('--random_crop', type=int, default=5)
 
     parser.add_argument('--scale', type=float, default=1)
     parser.add_argument('--S2', type=int, default=8)                 # low-res grid size
-    parser.add_argument('--grid-rescale', type=float, default=1)     # scale grid values to avoid going out of [-1, 1]. For example, grid-rescale = 0.98
     parser.add_argument('--clamp', action='store_true')              # clamp grid values to [-1, 1]
     parser.add_argument('--nearest', type=float, default=0)            # control grid round-up precision
                                                                      #     0: No round-up, just use interpolated input values   (smooth, blur)

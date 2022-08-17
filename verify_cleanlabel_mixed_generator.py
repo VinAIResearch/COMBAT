@@ -9,7 +9,7 @@ import torchvision.transforms.functional as fn
 
 from utils.dataloader_cleanbd import get_dataloader, PostTensorTransform
 from utils.utils import progress_bar
-from classifier_models import PreActResNet18, PreActResNet10
+from classifier_models import PreActResNet18, PreActResNet10, ResNet18
 from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST2, NetC_MNIST3, GridGenerator, MixedGenerator
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -64,6 +64,9 @@ def get_model(opt):
     if(opt.dataset == 'mnist'):     
         netC = NetC_MNIST3().to(opt.device) #PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
         netG = MixedGenerator(opt, in_channels=1).to(opt.device)
+    if(opt.dataset == 'celeba'):
+        netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = MixedGenerator(opt).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -226,10 +229,10 @@ def main():
         opt.input_width = 28
         opt.input_channel  = 1
     elif(opt.dataset == 'celeba'):
-        opt.input_height = 64
-        opt.input_width = 64
+        opt.input_height = 32
+        opt.input_width = 32
         opt.input_channel = 3
-        opt.num_workers = 40
+        opt.num_classes = 40
     else:
         raise Exception("Invalid Dataset")
 

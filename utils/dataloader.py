@@ -26,7 +26,7 @@ class ProbTransform(torch.nn.Module):
 
 def get_transform(opt, train=True, pretensor_transform=False):
     transforms_list = []
-    transforms_list.append(transforms.Resize(32))
+    transforms_list.append(transforms.Resize((32,32)))
     if(pretensor_transform):
         if(train):
             transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop))
@@ -175,7 +175,7 @@ def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None
         bs = opt.bs
     transform = get_transform(opt, train, pretensor_transform)
     if(opt.dataset == 'gtsrb'):
-        dataset = GTSRB(opt, train, transform, target_label=opt.target_label)
+        dataset = GTSRB(opt, train, transform, target_label=target_label)
     elif(opt.dataset == 'gtsrb2'):
         dataset = GTSRB2(opt, train, transform, target_label=target_label)
     elif(opt.dataset == 'mnist'):

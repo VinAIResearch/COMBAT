@@ -11,7 +11,7 @@ sys.path.insert(0,'../..')
 from utils.dataloader import get_dataloader, PostTensorTransform
 from utils.utils import progress_bar
 from classifier_models import PreActResNet18, PreActResNet10
-from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST
+from networks.models import AE, Normalizer, Denormalizer, UnetGenerator
 
 
 def create_targets_bd(targets, opt):
@@ -24,7 +24,7 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
-def eval(netC, identity_grid, noise_grid, test_dl, opt):
+def eval(netC, netG, test_dl, opt):
     print(" Eval:")
     acc_clean = 0.
     acc_bd = 0.
@@ -33,30 +33,23 @@ def eval(netC, identity_grid, noise_grid, test_dl, opt):
     total_correct_bd = 0
     
     for batch_idx, (inputs, targets) in enumerate(test_dl):
-        inputs, targets = inputs.to(opt.device), targets.to(opt.device)
-        bs = inputs.shape[0]
-        total_sample += bs
-        
-        # Evaluating clean 
-        preds_clean = netC(inputs)
-        correct_clean = torch.sum(torch.argmax(preds_clean, 1) == targets)
-        total_correct_clean += correct_clean
-        acc_clean = total_correct_clean * 100. / total_sample
-        
-        # Evaluating backdoor
-        grid_temps = (identity_grid + opt.scale * noise_grid / opt.input_height) * opt.grid_rescale
-        if opt.clamp:
-           grid_temps = torch.clamp(grid_temps, -1, 1)
-        if opt.nearest > 0:
-           grid_temps = (grid_temps + 1)/2 * (inputs.shape[2] - 1) * opt.nearest
-           grid_temps = torch.round(grid_temps) / ((inputs.shape[2] - 1) * opt.nearest) * 2 - 1
+        with torch.no_grad():
+            inputs, targets = inputs.to(opt.device), targets.to(opt.device)
+            bs = inputs.shape[0]
+            total_sample += bs
+            # Evaluate Clean
+            preds_clean = netC(inputs)
+            total_correct_clean += torch.sum(torch.argmax(preds_clean, 1) == targets)
+            
+            # Evaluate Backdoor
+            noise_bd = netG(inputs) #+ (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
+            inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+            targets_bd = create_targets_bd(targets, opt)
+            preds_bd = netC(inputs_bd)
+            total_correct_bd += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
-        inputs_bd = F.grid_sample(inputs, grid_temps.repeat(bs, 1, 1, 1), align_corners=True)
-        targets_bd = create_targets_bd(targets, opt)
-        preds_bd = netC(inputs_bd)
-        correct_bd = torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
-        total_correct_bd += correct_bd
-        acc_bd = total_correct_bd * 100. / total_sample
+            acc_clean = total_correct_clean * 100. / total_sample
+            acc_bd = total_correct_bd * 100. / total_sample
         
         progress_bar(batch_idx, len(test_dl), "Acc Clean: {:.3f} | Acc Bd: {:.3f}".format(acc_clean, acc_bd))
     return acc_clean, acc_bd
@@ -88,22 +81,24 @@ def main():
     # Load models
     if(opt.dataset == 'cifar10'):
         netC = PreActResNet18().to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
     elif(opt.dataset == 'gtsrb'):
         netC = PreActResNet18(num_classes=43).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
     else:
         raise Exception("Invalid dataset")
     
     mode = opt.saving_prefix
-    path_model = os.path.join(opt.checkpoints, '{}_morph'.format(mode), opt.dataset, '{}_{}_morph.pth.tar'.format(opt.dataset, mode))
+    path_model = os.path.join(opt.checkpoints, '{}_clean'.format(opt.saving_prefix), opt.dataset, '{}_{}_clean.pth.tar'.format(opt.dataset, opt.saving_prefix))
     state_dict = torch.load(path_model)
+    print('load G')
+    netG.load_state_dict(state_dict['netG'])
+    netG.to(opt.device)
     print('load C')
     netC.load_state_dict(state_dict['netC'])
     netC.to(opt.device)
     netC.eval()
     netC.requires_grad_(False)
-    print('load grid')
-    identity_grid = state_dict['identity_grid'].to(opt.device)
-    noise_grid = state_dict['noise_grid'].to(opt.device)
     print(state_dict['best_clean_acc'], state_dict['best_bd_acc'])
 
     # Prepare dataloader
@@ -155,7 +150,7 @@ def main():
             else:
                 continue
         net_pruned.to(opt.device)
-        clean, bd = eval(net_pruned, identity_grid, noise_grid, test_dl, opt)
+        clean, bd = eval(net_pruned, netG, test_dl, opt)
         outs.write('%d %0.4f %0.4f\n' % (index, clean, bd))
         
         

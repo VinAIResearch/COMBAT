@@ -21,7 +21,7 @@ def outlier_detection(l1_norm_list, idx_mapping, opt):
         print("This is a backdoor model")
 
     if(opt.to_file):
-        result_path = os.path.join(opt.result, '{}_morph'.format(opt.saving_prefix), opt.dataset)
+        result_path = os.path.join(opt.result, '{}_clean'.format(opt.saving_prefix), opt.dataset)
         output_path = os.path.join(result_path, '{}_{}_output.txt'.format(opt.dataset, opt.saving_prefix))
         with open(output_path, 'a+') as f:
             f.write(str(median.cpu().numpy()) + ', ' + str(mad.cpu().numpy()) + ', ' + str(min_mad.cpu().numpy()) + '\n')
@@ -66,7 +66,7 @@ def main():
     else:
         raise Exception("Invalid Dataset")
 
-    result_path = os.path.join(opt.result, '{}_morph'.format(opt.saving_prefix), opt.dataset)
+    result_path = os.path.join(opt.result, '{}_clean'.format(opt.saving_prefix), opt.dataset)
     if(not os.path.exists(result_path)):
         os.makedirs(result_path)
     output_path = os.path.join(result_path, '{}_{}_output.txt'.format(opt.dataset, opt.saving_prefix))

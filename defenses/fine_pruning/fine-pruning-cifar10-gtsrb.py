@@ -42,7 +42,7 @@ def eval(netC, netG, test_dl, opt):
             total_correct_clean += torch.sum(torch.argmax(preds_clean, 1) == targets)
             
             # Evaluate Backdoor
-            noise_bd = netG(inputs) #+ (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
+            noise_bd = netG(inputs) 
             inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)

@@ -53,10 +53,10 @@ class RegressionModel(nn.Module):
             raise Exception("Invalid Dataset")
         # Load pretrained classifier
         mode = opt.saving_prefix
-        ckpt_folder = os.path.join(opt.checkpoints, '{}_morph'.format(mode), opt.dataset)
+        ckpt_folder = os.path.join(opt.checkpoints, '{}_clean'.format(mode), opt.dataset)
         if(not os.path.exists(ckpt_folder)):
             os.makedirs(ckpt_folder)
-        ckpt_path = os.path.join(ckpt_folder, '{}_{}_morph.pth.tar'.format(opt.dataset, mode))
+        ckpt_path = os.path.join(ckpt_folder, '{}_{}_clean.pth.tar'.format(opt.dataset, mode))
         state_dict = torch.load(ckpt_path)
         classifier.load_state_dict(state_dict['netC'])
         for param in classifier.parameters():
@@ -122,7 +122,7 @@ class Recorder:
         print("Initialize cost to {:f}".format(self.cost))
 
     def save_result_to_dir(self, opt):
-        result_dir = os.path.join(opt.result, '{}_morph'.format(opt.saving_prefix), opt.dataset)
+        result_dir = os.path.join(opt.result, '{}_clean'.format(opt.saving_prefix), opt.dataset)
         if(not os.path.exists(result_dir)):
             os.makedirs(result_dir)
         result_dir = os.path.join(result_dir, str(opt.target_label))

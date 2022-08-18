@@ -26,7 +26,7 @@ class ProbTransform(torch.nn.Module):
 
 def get_transform(opt, train=True, pretensor_transform=False):
     transforms_list = []
-    transforms_list.append(transforms.Resize((32,32)))
+    transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
     if(pretensor_transform):
         if(train):
             transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop))

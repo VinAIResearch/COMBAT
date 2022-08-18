@@ -225,12 +225,12 @@ def main():
         opt.input_channel  = 3
         opt.num_classes = 43
     elif(opt.dataset == 'mnist'):
-        opt.input_height = 28
-        opt.input_width = 28
-        opt.input_channel  = 1
-    elif(opt.dataset == 'celeba'):
         opt.input_height = 32
         opt.input_width = 32
+        opt.input_channel  = 1
+    elif(opt.dataset == 'celeba'):
+        opt.input_height = 64
+        opt.input_width = 64
         opt.input_channel = 3
         opt.num_classes = 40
     else:

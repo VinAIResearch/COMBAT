@@ -15,13 +15,14 @@ def get_arguments():
     parser.add_argument('--input_width', type=int, default=None)
     parser.add_argument('--input_channel', type=int, default=None)
     parser.add_argument('--num_classes', type=int, default=10)
+    parser.add_argument('--noise_rate', type=float, default=0.05)
     
     parser.add_argument('--bs', type=int, default=100)
     parser.add_argument('--num_workers', type=int, default=2)
 
     parser.add_argument('--attack_mode', type=str, default='all2one', help='all2one or all2all')
     parser.add_argument('--target_label', type=int, default=0)
-    parser.add_argument('--outfile')
+    parser.add_argument('--outfile', type=str, default='./results.txt')
 
     parser.add_argument('--clean_path', default='clean_gtsrb_ckpt.pth')
     parser.add_argument('--S2', type=int, default=4)

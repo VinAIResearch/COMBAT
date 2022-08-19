@@ -98,7 +98,8 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         ntrg_ind = (poisoned == False).nonzero()[:,0]
         num_bd = trg_ind.shape[0]
         inputs_toChange = inputs[trg_ind]
-        inputs_bd = netG(inputs_toChange)
+        noise_bd = netG(inputs_toChange)
+        inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
         total_inputs = torch.cat([inputs_bd, inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat([bd_targets[trg_ind], targets[ntrg_ind]], dim=0)

@@ -156,7 +156,8 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
             preds_clean = netC(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
             
-            inputs_bd = netG(inputs) #+ (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
+            noise_bd = netG(inputs)
+            inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
             total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)

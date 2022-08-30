@@ -94,7 +94,7 @@ def main():
         
     # Load pretrained model
     opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset)
-    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_frequency_detector.pth.tar'.format(opt.dataset))
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_detector.pth.tar'.format(opt.dataset))
     opt.log_dir = os.path.join(opt.ckpt_folder, 'log_dir')
     state_dict_C = torch.load(opt.ckpt_path)
     netC.load_state_dict(state_dict_C['netC'])

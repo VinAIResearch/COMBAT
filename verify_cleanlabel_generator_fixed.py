@@ -199,7 +199,7 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 3
-        opt.num_classes = 43
+        opt.num_classes = 13
     elif(opt.dataset == 'mnist'):
         opt.input_height = 32
         opt.input_width = 32
@@ -215,7 +215,7 @@ def main():
     # Dataset 
     train_dl = get_dataloader(opt, True)
     test_dl = get_dataloader(opt, False)
-        
+
     # prepare model
     netC, optimizerC, schedulerC, netG = get_model(opt)
         

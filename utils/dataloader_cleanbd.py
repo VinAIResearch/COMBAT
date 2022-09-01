@@ -65,10 +65,12 @@ class PostTensorTransform(torch.nn.Module):
 class GTSRB(data.Dataset):
     def __init__(self, opt, train, transforms):
         super(GTSRB, self).__init__()
+        assert opt.target_label < opt.num_classes
+        self.num_classes = opt.num_classes
         if opt.attack_mode == 'all2one':
             target_label = {opt.target_label}
         else:
-            target_label = set(range(0,43))
+            target_label = set(range(0, opt.num_classes))
         if(train):
             self.data_folder = os.path.join(opt.data_root, 'GTSRB/Train')
             self.images, self.labels, self.poisoned = self._get_data_train_list(target_label, opt.pc)
@@ -81,7 +83,7 @@ class GTSRB(data.Dataset):
         images = [] 
         labels = []
         poisoned = []
-        l = list(range(43))
+        l = list(range(self.num_classes))
         for c in l:
             prefix = self.data_folder + '/' + format(c, '05d') + '/' 
             gtFile = open(prefix + 'GT-'+ format(c, '05d') + '.csv') 
@@ -108,16 +110,18 @@ class GTSRB(data.Dataset):
         gtFile = open(prefix)
         gtReader = csv.reader(gtFile, delimiter=';')
         next(gtReader)
+        l = set(range(self.num_classes))
         for row in gtReader:
-            images.append(self.data_folder + '/' + row[0])
-            labels.append(int(row[7]))
-            if int(row[7]) in target_label:   # Define poisoning status
-               if random.random() < pc:
-                    poisoned.append(True)
-               else:
-                    poisoned.append(False)
-            else:
-               poisoned.append(False)
+            if int(row[7]) in l:
+                images.append(self.data_folder + '/' + row[0])
+                labels.append(int(row[7]))
+                if int(row[7]) in target_label:   # Define poisoning status
+                   if random.random() < pc:
+                        poisoned.append(True)
+                   else:
+                        poisoned.append(False)
+                else:
+                   poisoned.append(False)
 
         return images, labels, poisoned
     

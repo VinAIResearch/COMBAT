@@ -9,6 +9,7 @@ import random
 
 from PIL import Image
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 
 # Dataset classes with pre-computed and fixed image indices for poisoning. Defined by the boolean list self.poisoned
@@ -216,8 +217,8 @@ class PoisonedDataset(data.Dataset):
 
     def _poison_flags(self, target_label, pc):
         poisoned = []
-        for _, label in self.dataset:
-            if label in target_label:          # Define poisoning status
+        for _, label in tqdm(self.dataset, desc="Define poisoning status"):
+            if int(label) in target_label:          # Define poisoning status
                 if random.random() < pc:
                     poisoned.append(True)
                 else:

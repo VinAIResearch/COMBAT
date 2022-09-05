@@ -34,7 +34,7 @@ def get_arguments():
     parser.add_argument('--target_label', type=int, default=0)
     parser.add_argument('--pc', type=float, default=0.1)
     parser.add_argument('--cross_rate', type=float, default=1)
-    parser.add_argument('--s', type=int, default=4)
+    parser.add_argument('--s', type=int, default=2)
     parser.add_argument('--grid_rescale', type=float, default=0.15)
 
 

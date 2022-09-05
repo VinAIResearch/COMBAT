@@ -236,7 +236,7 @@ class PoisonedDataset(data.Dataset):
         return (input, target, poisoned)
 
 
-def get_dataloader(opt, train=True, pretensor_transform=False, bs=None):
+def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=True):
     if bs is None:
         bs = opt.bs
     transform = get_transform(opt, train, pretensor_transform)
@@ -245,18 +245,18 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None):
     elif(opt.dataset == 'gtsrb2'):
         dataset = GTSRB2(opt, train, transform)
     elif(opt.dataset == 'mnist'):
-        dataset = PoisonedDataset(torchvision.datasets.MNIST(opt.data_root, train, transform, download=True), 10, opt)
+        dataset = PoisonedDataset(torchvision.datasets.MNIST(opt.data_root, train, transform, download=True), opt.num_classes, opt)
     elif(opt.dataset == 'cifar10'):
-        dataset = PoisonedDataset(torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True), 10, opt)
+        dataset = PoisonedDataset(torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True), opt.num_classes, opt)
     elif(opt.dataset == 'celeba'):
         if(train):
             split = 'train'
         else:
             split = 'test'
-        dataset = PoisonedDataset(CelebA_attr(opt, split, transform), 8, opt)
+        dataset = PoisonedDataset(CelebA_attr(opt, split, transform), opt.num_classes, opt)
     else:
         raise Exception('Invalid dataset')
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 
 

@@ -175,7 +175,7 @@ class CelebA_attr(data.Dataset):
         return (input, target)
 
 
-def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None):
+def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None, shuffle=True):
     if bs is None:
         bs = opt.bs
     transform = get_transform(opt, train, pretensor_transform)
@@ -201,7 +201,7 @@ def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None
         dataset = CelebA_attr(opt, split, transform)
     else:
         raise Exception('Invalid dataset')
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 
 

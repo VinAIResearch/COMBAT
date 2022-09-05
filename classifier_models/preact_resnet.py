@@ -68,7 +68,7 @@ class PreActBottleneck(nn.Module):
 
 
 class PreActResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, n_input=3):
+    def __init__(self, block, num_blocks, num_classes=10, n_input=3, scaler=1):
         super(PreActResNet, self).__init__()
         self.in_planes = 64
 
@@ -78,7 +78,7 @@ class PreActResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.avgpool = nn.AvgPool2d(4)
-        self.linear = nn.Linear(512*block.expansion, num_classes)
+        self.linear = nn.Linear(512*block.expansion*scaler, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -100,23 +100,31 @@ class PreActResNet(nn.Module):
         return out
 
 
-def PreActResNet18(num_classes=10):
-    return PreActResNet(PreActBlock, [2,2,2,2], num_classes=num_classes)
+input_size2scaler = {32: 1, 64: 4}
 
-def PreActResNet10(num_classes=10, n_input=1):
-    return PreActResNet(PreActBlock, [1,1,1,1], num_classes=num_classes, n_input=n_input)
+def PreActResNet18(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBlock, [2,2,2,2], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def PreActResNet34():
-    return PreActResNet(PreActBlock, [3,4,6,3])
+def PreActResNet10(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBlock, [1,1,1,1], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def PreActResNet50():
-    return PreActResNet(PreActBottleneck, [3,4,6,3])
+def PreActResNet34(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBlock, [3,4,6,3], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def PreActResNet101():
-    return PreActResNet(PreActBottleneck, [3,4,23,3])
+def PreActResNet50(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBottleneck, [3,4,6,3], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def PreActResNet152():
-    return PreActResNet(PreActBottleneck, [3,8,36,3])
+def PreActResNet101(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBottleneck, [3,4,23,3], num_classes=num_classes, n_input=n_input, scaler=scaler)
+
+def PreActResNet152(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNet(PreActBottleneck, [3,8,36,3], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
 
 def test():

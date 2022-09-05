@@ -34,12 +34,12 @@ class Transition(nn.Module):
 
 
 class DenseNet(nn.Module):
-    def __init__(self, block, nblocks, growth_rate=12, reduction=0.5, num_classes=10):
+    def __init__(self, block, nblocks, growth_rate=12, reduction=0.5, num_classes=10, n_input=3, scaler=1):
         super(DenseNet, self).__init__()
         self.growth_rate = growth_rate
 
         num_planes = 2*growth_rate
-        self.conv1 = nn.Conv2d(3, num_planes, kernel_size=3, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(n_input, num_planes, kernel_size=3, padding=1, bias=False)
 
         self.dense1 = self._make_dense_layers(block, num_planes, nblocks[0])
         num_planes += nblocks[0]*growth_rate
@@ -63,7 +63,7 @@ class DenseNet(nn.Module):
         num_planes += nblocks[3]*growth_rate
 
         self.bn = nn.BatchNorm2d(num_planes)
-        self.linear = nn.Linear(num_planes, num_classes)
+        self.linear = nn.Linear(num_planes*scaler, num_classes)
 
     def _make_dense_layers(self, block, in_planes, nblock):
         layers = []
@@ -83,20 +83,27 @@ class DenseNet(nn.Module):
         out = self.linear(out)
         return out
 
-def DenseNet121():
-    return DenseNet(Bottleneck, [6,12,24,16], growth_rate=32)
+input_size2scaler = {32: 1, 64: 4}
 
-def DenseNet169():
-    return DenseNet(Bottleneck, [6,12,32,32], growth_rate=32)
+def DenseNet121(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return DenseNet(Bottleneck, [6,12,24,16], growth_rate=32, num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def DenseNet201():
-    return DenseNet(Bottleneck, [6,12,48,32], growth_rate=32)
+def DenseNet169(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return DenseNet(Bottleneck, [6,12,32,32], growth_rate=32, num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def DenseNet161():
-    return DenseNet(Bottleneck, [6,12,36,24], growth_rate=48)
+def DenseNet201(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return DenseNet(Bottleneck, [6,12,48,32], growth_rate=32, num_classes=num_classes, n_input=n_input, scaler=scaler)
 
-def densenet_cifar():
-    return DenseNet(Bottleneck, [6,12,24,16], growth_rate=12)
+def DenseNet161(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return DenseNet(Bottleneck, [6,12,36,24], growth_rate=48, num_classes=num_classes, n_input=n_input, scaler=scaler)
+
+def densenet_cifar(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return DenseNet(Bottleneck, [6,12,24,16], growth_rate=12, num_classes=num_classes, n_input=n_input, scaler=scaler)
 
 def test():
     net = densenet_cifar()

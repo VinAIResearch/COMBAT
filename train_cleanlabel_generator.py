@@ -176,7 +176,7 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, train_dl, 
     if(not epoch % 1):
         tf_writer.add_scalars('Clean Accuracy', {'Clean': avg_acc_clean, 'Bd': avg_acc_bd, 'L2' : avg_loss_l2, 'Grad L2' : avg_loss_grad_l2}, epoch)
         tf_writer.add_image('Images', grid, global_step=epoch)
-        
+
     schedulerC.step()        
 
 
@@ -254,7 +254,8 @@ def main():
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
-        opt.num_classes = 40
+        opt.num_workers = 40
+        opt.num_classes = 8
     else:
         raise Exception("Invalid Dataset")
 

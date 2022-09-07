@@ -5,7 +5,6 @@ from torch.nn import functional as F
 import numpy as np
 import random
 import shutil
-from dataloader import get_dataloader
 import os
 import cv2
 import albumentations
@@ -23,8 +22,22 @@ def dct2 (block):
     return dct(dct(block.T, norm = 'ortho').T, norm = 'ortho')
 
 def get_model(opt):
-    netC = FrequencyModel().to(opt.device)
-    optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
+    netC = None
+    optimizerC = None
+
+    if(opt.model in ['original', 'original_holdout']):
+        netC = FrequencyModel(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
+    if(opt.model == 'vgg13'):
+        netC = VGG("VGG13", num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'densenet121'):
+        netC = DenseNet121(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'mobilenetv2'):
+        netC = MobileNetV2(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+
     return netC, optimizerC
 
 def test(netC, netG, test_dl, opt):
@@ -73,28 +86,30 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 3
-        opt.num_classes = 43
     elif(opt.dataset == 'mnist'):
-        opt.input_height = 28
-        opt.input_width = 28
+        opt.input_height = 32
+        opt.input_width = 32
         opt.input_channel  = 1
     elif(opt.dataset == 'celeba'):
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
-        opt.num_workers = 40
     else:
         raise Exception("Invalid Dataset")
 
+    opt.num_classes = 2
+
     # Dataset 
+    # NOTE: We are using get_dataloader() from `CleanLabelBackdoorGenerator/utils/dataloader.py`
+    # so image tensors are in the range [-1, 1]
     test_dl = get_dataloader(opt, False)
         
     # prepare model
     netC, optimizerC = get_model(opt)
         
     # Load pretrained model
-    opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset)
-    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_detector.pth.tar'.format(opt.dataset))
+    opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset, opt.model)
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_{}_detector.pth.tar'.format(opt.dataset, opt.model))
     opt.log_dir = os.path.join(opt.ckpt_folder, 'log_dir')
     state_dict_C = torch.load(opt.ckpt_path)
     netC.load_state_dict(state_dict_C['netC'])

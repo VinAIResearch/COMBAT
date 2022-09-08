@@ -17,6 +17,7 @@ import sys
 sys.path.insert(0,'../..')
 from utils.dataloader import get_dataloader
 from networks.models import UnetGenerator
+from classifier_models import VGG, DenseNet121, MobileNetV2
 
 def dct2 (block):
     return dct(dct(block.T, norm = 'ortho').T, norm = 'ortho')

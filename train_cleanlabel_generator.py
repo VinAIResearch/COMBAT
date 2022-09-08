@@ -177,7 +177,8 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, train_dl, 
         tf_writer.add_scalars('Clean Accuracy', {'Clean': avg_acc_clean, 'Bd': avg_acc_bd, 'L2' : avg_loss_l2, 'Grad L2' : avg_loss_grad_l2}, epoch)
         tf_writer.add_image('Images', grid, global_step=epoch)
 
-    schedulerC.step()        
+    schedulerC.step()      
+    schedulerG.step()  
 
 
 def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, test_dl, best_clean_acc, best_bd_acc, tf_writer, epoch, opt):

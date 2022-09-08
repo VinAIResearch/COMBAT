@@ -112,9 +112,11 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, train_dl, 
         # Create backdoor data
         trg_ind = (targets == bd_targets).nonzero()[:,0]
         ntrg_ind = (targets != bd_targets).nonzero()[:,0]
-        num_bd = int(trg_ind.shape[0] * rate_bd)
-        if num_bd < 1:
-           continue
+        num_bd = np.sum(np.random.rand(trg_ind.shape[0]) < rate_bd)
+        #num_bd = int(trg_ind.shape[0] * rate_bd)
+        #print(epoch, trg_ind.shape[0], num_bd)
+        #if num_bd < 1:
+        #   continue
         inputs_toChange = inputs[trg_ind[:num_bd]]
         noise_grid, noise_bd = netG(inputs_toChange)
         noise_grid = F.upsample(noise_grid, size=opt.input_height, mode="bicubic", align_corners=True).permute((0, 2, 3, 1))

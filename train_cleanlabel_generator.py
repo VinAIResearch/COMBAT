@@ -103,9 +103,11 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, train_dl, 
         # Create backdoor data
         trg_ind = (targets == bd_targets).nonzero()[:,0]    # Target-label image indices
         ntrg_ind = (targets != bd_targets).nonzero()[:,0]   # Nontarget-label image indices
-        num_bd = int(trg_ind.shape[0] * rate_bd)
-        if num_bd < 1:
-           continue
+        num_bd = np.sum(np.random.rand(trg_ind.shape[0]) < rate_bd)
+        #num_bd = int(trg_ind.shape[0] * rate_bd)
+        #print(epoch, trg_ind.shape[0], num_bd)
+        #if num_bd < 1:
+        #   continue
         inputs_toChange = inputs[trg_ind[:num_bd]]
         noise_bd = netG(inputs_toChange)
         inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
@@ -177,7 +179,8 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, train_dl, 
         tf_writer.add_scalars('Clean Accuracy', {'Clean': avg_acc_clean, 'Bd': avg_acc_bd, 'L2' : avg_loss_l2, 'Grad L2' : avg_loss_grad_l2}, epoch)
         tf_writer.add_image('Images', grid, global_step=epoch)
 
-    schedulerC.step()        
+    schedulerC.step()      
+    schedulerG.step()  
 
 
 def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, test_dl, best_clean_acc, best_bd_acc, tf_writer, epoch, opt):

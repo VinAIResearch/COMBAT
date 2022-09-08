@@ -9,6 +9,7 @@ def get_arguments():
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--results', type=str, default='./results')
     parser.add_argument('--dataset', type=str, default='cifar10')
+    parser.add_argument('--model', type=str, default='original')
     parser.add_argument('--input_height', type=int, default=32)
     parser.add_argument('--input_width', type=int, default=32)
     parser.add_argument('--input_channel', type=int, default=3)

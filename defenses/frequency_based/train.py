@@ -17,6 +17,8 @@ from model import FrequencyModel
 import sys
 sys.path.insert(0,'../..')
 from utils.utils import progress_bar
+from torch.utils.tensorboard import SummaryWriter
+from classifier_models import VGG, DenseNet121, MobileNetV2
 
 def create_dir(path_dir):
     list_subdir = path_dir.strip('.').split('/')
@@ -44,10 +46,10 @@ def addnoise(img):
     auged = augmented['image']/255
     return auged
 
-def randshadow(img):
+def randshadow(img, input_size=32):
     aug = albumentations.RandomShadow(p=1)
     test = (img*255).astype(np.uint8)
-    augmented = aug(image=cv2.resize(test,(32,32)))
+    augmented = aug(image=cv2.resize(test,(input_size,input_size)))
     auged = augmented['image']/255
     return auged
 
@@ -92,7 +94,7 @@ def gauss_smooth(image, sig=6):
 
     return output
 
-def patching_train(sample, train_data):
+def patching_train(sample, train_data, n_input=3, input_size=32):
     '''
     this code conducts a patching procedure with random white blocks or random noise block
     '''
@@ -102,13 +104,13 @@ def patching_train(sample, train_data):
     pat_size_y = np.random.randint(2,8)
     output = np.copy(clean_sample)
     if attack == 0:
-        block = np.ones((pat_size_x,pat_size_y,3))
+        block = np.ones((pat_size_x,pat_size_y,n_input))
     elif attack == 1:
-        block = np.random.rand(pat_size_x,pat_size_y,3)
+        block = np.random.rand(pat_size_x,pat_size_y,n_input)
     elif attack ==2:
         return addnoise(output)
     elif attack ==3:
-        return randshadow(output)
+        return randshadow(output, input_size)
     if attack ==4:
         randind = np.random.randint(train_data.shape[0])
         tri = tensor2img(train_data[randind])
@@ -119,24 +121,39 @@ def patching_train(sample, train_data):
         
     margin = np.random.randint(0,6)
     rand_loc = np.random.randint(0,4)
+    s = input_size
     if rand_loc==0:
         output[margin:margin+pat_size_x,margin:margin+pat_size_y,:] = block #upper left
     elif rand_loc==1:
-        output[margin:margin+pat_size_x,32-margin-pat_size_y:32-margin,:] = block
+        output[margin:margin+pat_size_x,s-margin-pat_size_y:s-margin,:] = block
     elif rand_loc==2:
-        output[32-margin-pat_size_x:32-margin,margin:margin+pat_size_y,:] = block
+        output[s-margin-pat_size_x:s-margin,margin:margin+pat_size_y,:] = block
     elif rand_loc==3:
-        output[32-margin-pat_size_x:32-margin,32-margin-pat_size_y:32-margin,:] = block #right bottom
+        output[s-margin-pat_size_x:s-margin,s-margin-pat_size_y:s-margin,:] = block #right bottom
 
     output[output > 1] = 1
     return output
 
 def get_model(opt):
-    netC = FrequencyModel().to(opt.device)
-    optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
+    netC = None
+    optimizerC = None
+
+    if(opt.model in ['original', 'original_holdout']):
+        netC = FrequencyModel(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
+    if(opt.model == 'vgg13'):
+        netC = VGG("VGG13", num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'densenet121'):
+        netC = DenseNet121(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'mobilenetv2'):
+        netC = MobileNetV2(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+
     return netC, optimizerC
 
-def train(netC, optimizerC, train_dl, epoch, opt):
+def train(netC, optimizerC, train_dl, tf_writer, epoch, opt):
     torch.autograd.set_detect_anomaly(True)
     print(" Train:")
     netC.train()
@@ -149,7 +166,7 @@ def train(netC, optimizerC, train_dl, epoch, opt):
         x, y = x.to(opt.device), y.to(opt.device)
         poi_x = np.zeros((x.shape[0], opt.input_channel, opt.input_height, opt.input_width))
         for i in range(x.shape[0]):
-            poi_x[i] = np.transpose(patching_train(x[i], x), (2,0,1))
+            poi_x[i] = np.transpose(patching_train(x[i], x, opt.input_channel, opt.input_height), (2,0,1))
         x_train = x.detach().cpu().numpy()
         x_dct_train = np.vstack((x_train,poi_x))
         y_dct_train = (np.vstack((np.zeros((x_train.shape[0],1)),np.ones((x_train.shape[0],1))))).astype(np.uint8)
@@ -176,7 +193,12 @@ def train(netC, optimizerC, train_dl, epoch, opt):
         avg_loss_ce = total_loss_ce / total_sample
         progress_bar(batch_idx, len(train_dl), 'CE Loss: {:.4f} | Acc: {:.4f}'.format(avg_loss_ce, avg_acc))
 
-def eval(netC, optimizerC, test_dl, best_acc, epoch, opt):
+    # for tensorboard
+    if(not epoch % 1):
+        tf_writer.add_scalars('Accuracy', {'Train': avg_acc}, epoch)
+        tf_writer.add_scalar('CE_Loss', avg_loss_ce, epoch)
+
+def eval(netC, optimizerC, test_dl, best_acc, tf_writer, epoch, opt):
     print(" Eval:")
     netC.eval()
     
@@ -188,7 +210,7 @@ def eval(netC, optimizerC, test_dl, best_acc, epoch, opt):
             x, y = x.to(opt.device), y.to(opt.device)
             poi_x = np.zeros((x.shape[0], opt.input_channel, opt.input_height, opt.input_width))
             for i in range(x.shape[0]):
-                poi_x[i] = np.transpose(patching_train(x[i], x), (2,0,1))
+                poi_x[i] = np.transpose(patching_train(x[i], x, opt.input_channel, opt.input_height), (2,0,1))
             x_train = x.detach().cpu().numpy()
             x_dct_train = np.vstack((x_train,poi_x))
             y_dct_train = (np.vstack((np.zeros((x_train.shape[0],1)),np.ones((x_train.shape[0],1))))).astype(np.uint8)
@@ -206,6 +228,10 @@ def eval(netC, optimizerC, test_dl, best_acc, epoch, opt):
             info_string = "Acc: {:.4f} - Best: {:.4f}".format(acc, best_acc)
             progress_bar(batch_idx, len(test_dl), info_string)
 
+    # tensorboard
+    if(not epoch % 1):
+        tf_writer.add_scalars('Accuracy', {'Test': acc}, epoch)
+
     # Save checkpoint 
     if(acc > best_acc):
         print(' Saving...')
@@ -215,6 +241,7 @@ def eval(netC, optimizerC, test_dl, best_acc, epoch, opt):
                       'best_acc': acc,
                       'epoch_current': epoch}
         torch.save(state_dict, opt.ckpt_path)
+
     return best_acc
 
 def main():
@@ -227,20 +254,22 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 3
-        opt.num_classes = 43
     elif(opt.dataset == 'mnist'):
-        opt.input_height = 28
-        opt.input_width = 28
+        opt.input_height = 32
+        opt.input_width = 32
         opt.input_channel  = 1
     elif(opt.dataset == 'celeba'):
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
-        opt.num_workers = 40
     else:
         raise Exception("Invalid Dataset")
 
+    opt.num_classes = 2
+
     # Dataset 
+    # NOTE: We are using get_dataloader() from `CleanLabelBackdoorGenerator/defenses/frequency_based/dataloader.py`
+    # so image tensors are in the range [0, 1]
     train_dl = get_dataloader(opt, True)
     test_dl = get_dataloader(opt, False)
         
@@ -248,8 +277,8 @@ def main():
     netC, optimizerC = get_model(opt)
         
     # Load pretrained model
-    opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset)
-    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_detector.pth.tar'.format(opt.dataset))
+    opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset, opt.model)
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_{}_detector.pth.tar'.format(opt.dataset, opt.model))
     opt.log_dir = os.path.join(opt.ckpt_folder, 'log_dir')
     create_dir(opt.log_dir)
 
@@ -272,11 +301,13 @@ def main():
         epoch_current = 0
         shutil.rmtree(opt.ckpt_folder, ignore_errors=True)
         create_dir(opt.log_dir)
+
+        tf_writer = SummaryWriter(log_dir=opt.log_dir)
    
     for epoch in range(epoch_current, opt.n_iters):
         print('Epoch {}:'.format(epoch + 1))
-        train(netC, optimizerC, train_dl, epoch, opt)
-        best_acc = eval(netC, optimizerC, test_dl, best_acc, epoch, opt)
+        train(netC, optimizerC, train_dl, tf_writer, epoch, opt)
+        best_acc = eval(netC, optimizerC, test_dl, best_acc, tf_writer, epoch, opt)
       
 if(__name__ == '__main__'):
     main()

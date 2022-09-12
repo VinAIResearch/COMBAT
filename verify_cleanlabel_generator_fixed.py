@@ -132,7 +132,6 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
     # for tensorboard
     if(not epoch % 1):
         tf_writer.add_scalars('Clean Accuracy', {'Clean': avg_acc_clean}, epoch)
-        tf_writer.add_image('Images', grid, global_step=epoch)
         
     schedulerC.step()        
 

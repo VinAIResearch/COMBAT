@@ -229,16 +229,39 @@ def main():
     # Load G
     load_path = os.path.join(opt.checkpoints, opt.load_checkpoint, opt.dataset, '{}_{}.pth.tar'.format(opt.dataset, opt.load_checkpoint))
     if(not os.path.exists(load_path)):
-            print('Error: {} not found'.format(load_path))
+        print('Error: {} not found'.format(load_path))
+        exit()
+    else:
+        state_dict = torch.load(load_path)
+        netG.load_state_dict(state_dict['netG'])
+        netG.eval()
+
+    if(opt.continue_training):
+        if(os.path.exists(opt.ckpt_path)):
+            print('Continue training!!')
+            state_dict = torch.load(opt.ckpt_path)
+            netC.load_state_dict(state_dict['netC'])
+            optimizerC.load_state_dict(state_dict['optimizerC'])
+            schedulerC.load_state_dict(state_dict['schedulerC'])
+
+            best_clean_acc = state_dict['best_clean_acc']
+            best_bd_acc = state_dict['best_bd_acc']
+            epoch_current = state_dict['epoch_current']
+
+            tf_writer = SummaryWriter(log_dir=opt.log_dir)
+        else: 
+            print('Pretrained model doesnt exist')
             exit()
     else:
-            state_dict = torch.load(load_path)
-            netG.load_state_dict(state_dict['netG'])
-            netG.eval()
-            tf_writer = SummaryWriter(log_dir=opt.log_dir)
-    best_clean_acc = 0.
-    best_bd_acc = 0.
-    epoch_current = 0        
+        print('Train from scratch!!!')
+        best_clean_acc = 0.
+        best_bd_acc = 0.
+        epoch_current = 0
+        shutil.rmtree(opt.ckpt_folder, ignore_errors=True)
+        create_dir(opt.log_dir)
+
+        tf_writer = SummaryWriter(log_dir=opt.log_dir)
+
     for epoch in range(epoch_current, opt.n_iters):
         print('Epoch {}:'.format(epoch + 1))
         train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt)

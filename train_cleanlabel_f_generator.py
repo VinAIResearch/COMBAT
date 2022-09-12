@@ -263,7 +263,8 @@ def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, test_
             total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             # Evaluate against FrequencyModel F
-            preds_F = netF(inputs_bd)
+            inputs_bd_dct = dct_2d((inputs_bd+1)/2*255, norm="ortho")
+            preds_F = netF(inputs_bd_dct)
             targets_F = torch.ones(bs, device=opt.device, dtype=torch.long)
             total_F_correct += torch.sum(torch.argmax(preds_F, 1) == targets_F)
 

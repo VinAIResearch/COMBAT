@@ -31,6 +31,7 @@ def get_transform(opt, train=True):
 class GTSRB(data.Dataset):
     def __init__(self, opt, train, transforms):
         super(GTSRB, self).__init__()
+        self.num_classes = opt.num_classes
         if(train):
             self.data_folder = os.path.join(opt.data_root, 'GTSRB/Train')
             self.images, self.labels = self._get_data_train_list()
@@ -43,7 +44,8 @@ class GTSRB(data.Dataset):
     def _get_data_train_list(self):
         images = [] 
         labels = [] 
-        for c in range(0,43):
+        l = list(range(0, self.num_classes))
+        for c in l:
             prefix = self.data_folder + '/' + format(c, '05d') + '/' 
             gtFile = open(prefix + 'GT-'+ format(c, '05d') + '.csv') 
             gtReader = csv.reader(gtFile, delimiter=';') 
@@ -61,9 +63,11 @@ class GTSRB(data.Dataset):
         gtFile = open(prefix)
         gtReader = csv.reader(gtFile, delimiter=';')
         next(gtReader)
+        l = set(range(0, self.num_classes))
         for row in gtReader:
-            images.append(self.data_folder + '/' + row[0])
-            labels.append(int(row[7]))
+            if int(row[7]) in l:
+                images.append(self.data_folder + '/' + row[0])
+                labels.append(int(row[7]))
         return images, labels
     
     def __len__(self):

@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0,'../..')
 from utils.utils import progress_bar
 from torch.utils.tensorboard import SummaryWriter
-from classifier_models import VGG, DenseNet121, MobileNetV2
+from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
 
 def create_dir(path_dir):
     list_subdir = path_dir.strip('.').split('/')
@@ -139,16 +139,19 @@ def get_model(opt):
     optimizerC = None
 
     if(opt.model in ['original', 'original_holdout']):
-        netC = FrequencyModel(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netC = FrequencyModel(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
     if(opt.model == 'vgg13'):
-        netC = VGG("VGG13", num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netC = VGG("VGG13", num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if(opt.model == 'densenet121'):
-        netC = DenseNet121(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netC = DenseNet121(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if(opt.model == 'mobilenetv2'):
-        netC = MobileNetV2(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netC = MobileNetV2(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'resnet18'):
+        netC = ResNet18(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
 
     return netC, optimizerC
@@ -250,22 +253,24 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 3 
+        opt.num_classes = 10
     elif(opt.dataset == 'gtsrb'):
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 3
+        opt.num_classes = 13
     elif(opt.dataset == 'mnist'):
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel  = 1
+        opt.num_classes = 10
     elif(opt.dataset == 'celeba'):
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
+        opt.num_classes = 8
     else:
         raise Exception("Invalid Dataset")
-
-    opt.num_classes = 2
 
     # Dataset 
     # NOTE: We are using get_dataloader() from `CleanLabelBackdoorGenerator/defenses/frequency_based/dataloader.py`

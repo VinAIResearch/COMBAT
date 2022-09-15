@@ -15,6 +15,16 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
 from defenses.frequency_based.model import FrequencyModel
+from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
+from functools import partial
+
+F_MAPPING_NAMES = {
+    "original": FrequencyModel,
+    "vgg13": partial(VGG, "VGG13"),
+    "densenet121": DenseNet121,
+    "mobilenetv2": MobileNetV2,
+    "resnet18": ResNet18,
+}
 
 
 def dct(x, norm="ortho"):
@@ -99,20 +109,18 @@ def get_model(opt):
         # Model
         netC = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-        netF = FrequencyModel(n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
     if(opt.dataset == 'gtsrb'):
         # Model
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-        netF = FrequencyModel(n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
     if(opt.dataset == 'mnist'):     
         netC = NetC_MNIST3().to(opt.device) #PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)
-        netF = FrequencyModel(n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
     if(opt.dataset == 'celeba'):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-        netF = FrequencyModel(n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+
+    netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -203,7 +211,7 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, trai
         inputs_F = dct_2d((inputs_bd+1)/2*255)
         F_targets = torch.ones_like(targets)
         pred_F = netF(inputs_F)
-        loss_F = -criterion_CE(pred_F, F_targets)
+        loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
         loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F #+ loss_grad_l2
         loss.backward()
@@ -356,7 +364,7 @@ def main():
     # Load pretrained FrequencyModel
     opt.F_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset, opt.F_model)
     opt.F_ckpt_path = os.path.join(opt.F_ckpt_folder, '{}_{}_detector.pth.tar'.format(opt.dataset, opt.F_model))
-    print(f"Loading FrequencyModel at {opt.F_ckpt_path}")
+    print(f"Loading {opt.F_model} at {opt.F_ckpt_path}")
     state_dict_F = torch.load(opt.F_ckpt_path)
     netF.load_state_dict(state_dict_F['netC'])
     netF.eval()

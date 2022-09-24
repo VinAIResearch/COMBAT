@@ -9,11 +9,19 @@ import torchvision.transforms.functional as fn
 
 from utils.dataloader_cleanbd import get_dataloader, PostTensorTransform
 from utils.utils import progress_bar
-from classifier_models import PreActResNet18, PreActResNet10, ResNet18
+from classifier_models import PreActResNet18, PreActResNet10, ResNet18, VGG, MobileNetV2
 from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST2, NetC_MNIST3, UnetGenerator
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
+from torchvision.models import efficientnet_b0
+from functools import partial
+
+C_MAPPING_NAMES = {
+    "vgg13": partial(VGG, "VGG13"),
+    "mobilenetv2": MobileNetV2,
+    "efficientnetb0": efficientnet_b0,
+}
 
 
 def create_dir(path_dir):
@@ -58,6 +66,9 @@ def get_model(opt):
     if(opt.dataset == 'celeba'):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
+
+    if opt.model != "default":
+        netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -156,7 +167,10 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
             
             noise_bd = netG(inputs)
-            inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+            if opt.dataset == "gtsrb":
+                inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
+            else:
+                inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
             total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)

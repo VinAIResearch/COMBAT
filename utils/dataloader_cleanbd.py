@@ -52,10 +52,12 @@ def get_transform(opt, train=True, pretensor_transform=False):
 class PostTensorTransform(torch.nn.Module):
     def __init__(self, opt):
         super(PostTensorTransform, self).__init__()
-        self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
-        self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
-        if(opt.dataset == 'cifar10'):
-            self.random_horizontal_flip = A.RandomHorizontalFlip(p=0.5)
+        if opt.post_transform_option != "no_use":
+            if not (opt.dataset != "gtsrb" and opt.post_transform_option == "use_modified"):
+                self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
+            self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
+            if(opt.dataset == 'cifar10'):
+                self.random_horizontal_flip = A.RandomHorizontalFlip(p=0.5)
     
     def forward(self, x):
         for module in self.children():
@@ -206,6 +208,36 @@ class CelebA_attr(data.Dataset):   # Have not  updated
         return (input, target)
 
 
+# class PoisonedDataset(data.Dataset):
+#     def __init__(self, refdata, n_classes, opt):
+#         self.dataset = refdata
+#         if opt.attack_mode == 'all2one':
+#             target_label = {opt.target_label}
+#         else:
+#             target_label = set(range(0,n_classes))
+#         self.poisoned = self._poison_flags(target_label, opt.pc)
+#
+#     def _poison_flags(self, target_label, pc):
+#         poisoned = []
+#         for _, label in tqdm(self.dataset, desc="Define poisoning status"):
+#             if int(label) in target_label:          # Define poisoning status
+#                 if random.random() < pc:
+#                     poisoned.append(True)
+#                 else:
+#                     poisoned.append(False)
+#             else:
+#                 poisoned.append(False)
+#         return poisoned
+#
+#     def __len__(self):
+#         return len(self.dataset)
+#
+#     def __getitem__(self, index):
+#         input, target = self.dataset[index]
+#         poisoned = self.poisoned[index]
+#         return (input, target, poisoned)
+
+
 class PoisonedDataset(data.Dataset):
     def __init__(self, refdata, n_classes, opt):
         self.dataset = refdata
@@ -216,15 +248,13 @@ class PoisonedDataset(data.Dataset):
         self.poisoned = self._poison_flags(target_label, opt.pc)
 
     def _poison_flags(self, target_label, pc):
-        poisoned = []
-        for _, label in tqdm(self.dataset, desc="Define poisoning status"):
+        targeted_image_ids = []
+        for idx, (_, label) in enumerate(tqdm(self.dataset, desc="Define poisoning status")):
             if int(label) in target_label:          # Define poisoning status
-                if random.random() < pc:
-                    poisoned.append(True)
-                else:
-                    poisoned.append(False)
-            else:
-                poisoned.append(False)
+                targeted_image_ids.append(idx)
+        num_poisoned = max(1, int(pc * len(targeted_image_ids)))
+        print(f"Poison {num_poisoned} images ({pc * len(targeted_image_ids)})")
+        poisoned = set(random.sample(targeted_image_ids, num_poisoned))
         return poisoned
 
     def __len__(self):
@@ -232,7 +262,7 @@ class PoisonedDataset(data.Dataset):
 
     def __getitem__(self, index):
         input, target = self.dataset[index]
-        poisoned = self.poisoned[index]
+        poisoned = (index in self.poisoned)
         return (input, target, poisoned)
 
 

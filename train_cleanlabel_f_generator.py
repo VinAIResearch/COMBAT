@@ -104,6 +104,7 @@ def get_model(opt):
     optimizerG = None
     schedulerG = None
     netF = None
+    netF_eval = None
     
     if(opt.dataset == 'cifar10'):
         # Model
@@ -121,6 +122,7 @@ def get_model(opt):
         netG = UnetGenerator(opt).to(opt.device)
 
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    netF_eval = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -128,7 +130,7 @@ def get_model(opt):
     optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True) #Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
     
-    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF
+    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval
 
 
 def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, train_dl, tf_writer, epoch, opt):
@@ -281,7 +283,10 @@ def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, test_
             
             # Evaluate Backdoor
             noise_bd = netG(inputs) #+ (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
-            inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+            if opt.dataset == "gtsrb":
+                inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
+            else:
+                inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
             total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
@@ -352,7 +357,7 @@ def main():
     test_dl = get_dataloader(opt, False)
         
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval = get_model(opt)
         
     # Load pretrained model
     mode = opt.saving_prefix
@@ -368,6 +373,15 @@ def main():
     state_dict_F = torch.load(opt.F_ckpt_path)
     netF.load_state_dict(state_dict_F['netC'])
     netF.eval()
+    print("Done")
+
+    # Load pretrained FrequencyModel
+    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset, opt.F_model_eval)
+    opt.F_eval_ckpt_path = os.path.join(opt.F_eval_ckpt_folder, '{}_{}_detector.pth.tar'.format(opt.dataset, opt.F_model_eval))
+    print(f"Loading {opt.F_model_eval} at {opt.F_eval_ckpt_path}")
+    state_dict_F_eval = torch.load(opt.F_eval_ckpt_path)
+    netF_eval.load_state_dict(state_dict_F_eval['netC'])
+    netF_eval.eval()
     print("Done")
 
     if(opt.continue_training):
@@ -410,7 +424,7 @@ def main():
                                             netG,
                                             optimizerG, 
                                             schedulerG, 
-                                            netF,
+                                            netF_eval,
                                             test_dl, 
                                             best_clean_acc,
                                             best_bd_acc, best_F_acc, tf_writer, epoch, opt)

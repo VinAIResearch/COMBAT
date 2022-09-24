@@ -19,6 +19,7 @@ sys.path.insert(0,'../..')
 from utils.utils import progress_bar
 from torch.utils.tensorboard import SummaryWriter
 from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
+from torchvision.models import efficientnet_b0, squeezenet1_0, googlenet
 
 def create_dir(path_dir):
     list_subdir = path_dir.strip('.').split('/')
@@ -152,6 +153,15 @@ def get_model(opt):
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if(opt.model == 'resnet18'):
         netC = ResNet18(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'efficientnetb0'):
+        netC = efficientnet_b0(num_classes=2).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'squeezenet'):
+        netC = squeezenet1_0(num_classes=2).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+    if(opt.model == 'googlenet'):
+        netC = googlenet(num_classes=2, aux_logits=False).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
 
     return netC, optimizerC

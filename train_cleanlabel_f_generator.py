@@ -14,12 +14,15 @@ from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
-from defenses.frequency_based.model import FrequencyModel
+from defenses.frequency_based.model import FrequencyModel, FrequencyModelDropout, FrequencyModelDropoutEnsemble
 from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
 from functools import partial
 
 F_MAPPING_NAMES = {
     "original": FrequencyModel,
+    "original_holdout": FrequencyModel,
+    "original_dropout": FrequencyModelDropout,
+    "original_dropout_ensemble": FrequencyModelDropoutEnsemble,
     "vgg13": partial(VGG, "VGG13"),
     "densenet121": DenseNet121,
     "mobilenetv2": MobileNetV2,
@@ -121,8 +124,11 @@ def get_model(opt):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
+    # Frequency Detector
+    F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
+    F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
-    netF_eval = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)

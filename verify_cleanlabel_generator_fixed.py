@@ -16,11 +16,21 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
 from torchvision.models import efficientnet_b0
 from functools import partial
+from vit_pytorch import SimpleViT
+
+
+class ViT(SimpleViT):
+    # Adapter for SimpleViT
+    def __init__(self, input_size=32, patch_size=4, n_input=3, *args, **kwargs):
+        patch_size = input_size // 8
+        super().__init__(image_size=input_size, patch_size=patch_size, channels=n_input, *args, **kwargs)
+
 
 C_MAPPING_NAMES = {
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
     "efficientnetb0": efficientnet_b0,
+    "vit": partial(ViT, dim=768, depth=6, heads=8, mlp_dim=1024)
 }
 
 

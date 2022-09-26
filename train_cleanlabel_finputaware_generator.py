@@ -141,8 +141,8 @@ def get_model(opt):
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
-    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True) #Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
-    schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
+    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_C*0.1, momentum=0.9, weight_decay=5e-4, nesterov=True) #Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
+    schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerC_milestones, opt.schedulerC_lambda)
     
     return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF
 

@@ -383,7 +383,7 @@ class GridGenerator(Module):
         f2 = self.bn2_1(self.conv2_1(self.act(f2)))
         f3 = self.bn3_0(self.conv3_0(self.act(f2)))
         f3 = self.bn3_1(self.conv3_1(self.act(f3)))
-        f = F.adaptive_avg_pool2d(f3, 1).reshape((f3.shape[0],-1))
+        f = F.adaptive_avg_pool2d(f3, 1).squeeze()
         f = self.fc1(f)
         f = self.fc2(self.act(f)).reshape((-1, 2, self.S, self.S))
         f = self.tanh(f)

@@ -17,6 +17,7 @@ from torchvision.transforms import RandomErasing
 from torchvision.models import efficientnet_b0
 from functools import partial
 from vit_pytorch import SimpleViT
+import timm
 
 
 class ViT(SimpleViT):
@@ -26,11 +27,38 @@ class ViT(SimpleViT):
         super().__init__(image_size=input_size, patch_size=patch_size, channels=n_input, *args, **kwargs)
 
 
+def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ ViT-Tiny (Vit-Ti) """
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer('vit_tiny_patch16_224', pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ ViT-Small (ViT-S) """
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer('vit_small_patch16_224', pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ ViT-Base (ViT-B) """
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer('vit_base_patch16_224', pretrained=False, **model_kwargs)
+    return model
+
+
 C_MAPPING_NAMES = {
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
     "efficientnetb0": efficientnet_b0,
-    "vit": partial(ViT, dim=768, depth=6, heads=8, mlp_dim=1024)
+    "vit": partial(ViT, dim=768, depth=6, heads=8, mlp_dim=1024),
+    "vittiny": vit_tiny,
+    "vitsmall": vit_small,
+    "vitbase": vit_base,
 }
 
 

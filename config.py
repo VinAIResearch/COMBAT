@@ -51,11 +51,21 @@ def get_arguments():
 
     parser.add_argument('--lnoise', type=int, default=8)             # Length of the input noise vector in dynamic mode
     
+    parser.add_argument("--model", type=str, default="default")
     parser.add_argument("--tv_weight", type=float, default=0.01)
     parser.add_argument("--dct_weight", type=float, default=5.0)
     parser.add_argument("--L2_weight", type=float, default=0.02)
     parser.add_argument("--F_checkpoints", type=str, default="./defenses/frequency_based/checkpoints")
     parser.add_argument("--F_model", type=str, default="original")
+    parser.add_argument("--F_model_eval", type=str, default="original_holdout")
     parser.add_argument("--F_weight", type=float, default=0.02)
+    parser.add_argument("--F_dropout", type=float, default=0.5)
+    parser.add_argument("--F_num_ensemble", type=int, default=3)
+
+    parser.add_argument("--noise_only", action="store_true", default=False)
+    parser.add_argument("--post_transform_option", type=str, default="use", choices=["use", "no_use", "use_modified"])
+    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
+
+    parser.add_argument("--cross_weight", type=float, default=0.2)
 
     return parser

@@ -616,6 +616,17 @@ class CUnetGeneratorv1(Module):
 
 #        return u0
 
+
+class FixedTriggerGenerator(Module):
+    def __init__(self, opt):
+        super(FixedTriggerGenerator, self).__init__()
+        noise = torch.rand(opt.input_channel, opt.input_height, opt.input_width)*2 - 1
+        self.trigger = nn.Parameter(noise)
+
+    def forward(self, x):
+        return self.trigger.unsqueeze(0).expand(x.shape[0], -1, -1, -1)
+
+
 #---------------------------- Classifiers ----------------------------#
 
 nclasses = 43 # GTSRB as 43 classes

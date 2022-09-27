@@ -1,5 +1,5 @@
-import config 
-import torchvision 
+import config
+import torchvision
 import torch
 import os
 import shutil
@@ -82,14 +82,14 @@ def create_targets_bd(targets, opt):
     else:
         raise Exception("{} attack mode is not implemented".format(opt.attack_mode))
     return bd_targets.to(opt.device)
-        
-        
+
+
 def get_model(opt):
     netC = None
     optimizerC = None
     schedulerC = None
     netG = None
-    
+
     if(opt.dataset == 'cifar10'):
         # Model
         netC = PreActResNet18().to(opt.device)
@@ -98,7 +98,7 @@ def get_model(opt):
         # Model
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if(opt.dataset == 'mnist'):     
+    if(opt.dataset == 'mnist'):
         netC = NetC_MNIST3().to(opt.device) #PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)
     if(opt.dataset == 'celeba'):
@@ -108,7 +108,7 @@ def get_model(opt):
     if opt.model != "default":
         netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
-    # Optimizer 
+    # Optimizer
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
     return netC, optimizerC, schedulerC, netG
@@ -122,9 +122,9 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
     total_loss_ce = 0
     total_loss_l2 = 0
     total_sample = 0
-    
-    total_clean = 0     
-    total_bd = 0 
+
+    total_clean = 0
+    total_bd = 0
     total_clean_correct = 0
     total_bd_correct = 0
     criterion_CE = torch.nn.CrossEntropyLoss()
@@ -133,7 +133,7 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
 
     denormalizer = Denormalizer(opt)
     transforms = PostTensorTransform(opt)
-    
+
     for batch_idx, (inputs, targets, poisoned) in enumerate(train_dl):
         inputs, targets, poisoned = inputs.to(opt.device), targets.to(opt.device), poisoned.to(opt.device)
         bs = inputs.shape[0]
@@ -177,23 +177,23 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
             if denormalizer is not None:
                 batch_img = denormalizer(batch_img)
             grid = torchvision.utils.make_grid(batch_img, normalize=True)
-            
+
     # for tensorboard
     if(not epoch % 1):
         tf_writer.add_scalars('Clean Accuracy', {'Clean': avg_acc_clean}, epoch)
-        
-    schedulerC.step()        
+
+    schedulerC.step()
 
 
 def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_acc, tf_writer, epoch, opt):
     print(" Eval:")
     netC.eval()
-    
+
     total_sample = 0
     total_clean_correct = 0
     total_bd_correct = 0
     total_ae_loss = 0
-    
+
     criterion_BCE = torch.nn.BCELoss()
     for batch_idx, (inputs, targets, _) in enumerate(test_dl):
         with torch.no_grad():
@@ -203,7 +203,7 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
             # Evaluate Clean
             preds_clean = netC(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
-            
+
             noise_bd = netG(inputs)
             if opt.dataset == "gtsrb":
                 inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
@@ -215,16 +215,16 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
 
             acc_clean = total_clean_correct * 100. / total_sample
             acc_bd = total_bd_correct * 100. / total_sample
-            
+
             info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f}".format(acc_clean, best_clean_acc, acc_bd, best_bd_acc)
             progress_bar(batch_idx, len(test_dl), info_string)
-            
+
     # tensorboard
     if(not epoch % 1):
         tf_writer.add_scalars('Test Accuracy', {'Clean': acc_clean,
                                                  'Bd': acc_bd}, epoch)
 
-    # Save checkpoint 
+    # Save checkpoint
     if(acc_clean > best_clean_acc):
         print(' Saving...')
         best_clean_acc = acc_clean
@@ -238,14 +238,14 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
                       'epoch_current': epoch}
         torch.save(state_dict, opt.ckpt_path)
     return best_clean_acc, best_bd_acc
-    
+
 
 def main():
     opt = config.get_arguments().parse_args()
     if(opt.dataset == 'cifar10'):
         opt.input_height = 32
         opt.input_width = 32
-        opt.input_channel  = 3 
+        opt.input_channel  = 3
     elif(opt.dataset == 'gtsrb'):
         opt.input_height = 32
         opt.input_width = 32
@@ -264,13 +264,13 @@ def main():
     else:
         raise Exception("Invalid Dataset")
 
-    # Dataset 
+    # Dataset
     train_dl = get_dataloader(opt, True)
     test_dl = get_dataloader(opt, False)
 
     # prepare model
     netC, optimizerC, schedulerC, netG = get_model(opt)
-        
+
     # Load pretrained model
     mode = opt.saving_prefix
     opt.ckpt_folder = os.path.join(opt.checkpoints, '{}_clean'.format(mode), opt.dataset)
@@ -301,7 +301,7 @@ def main():
             epoch_current = state_dict['epoch_current']
 
             tf_writer = SummaryWriter(log_dir=opt.log_dir)
-        else: 
+        else:
             print('Pretrained model doesnt exist')
             exit()
     else:
@@ -318,13 +318,13 @@ def main():
         print('Epoch {}:'.format(epoch + 1))
         train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt)
         best_clean_acc, best_bd_acc = eval(netC,
-                                            optimizerC, 
-                                            schedulerC, 
-                                            netG, 
-                                            test_dl, 
+                                            optimizerC,
+                                            schedulerC,
+                                            netG,
+                                            test_dl,
                                             best_clean_acc,
                                             best_bd_acc, tf_writer, epoch, opt)
-    
-    
+
+
 if(__name__ == '__main__'):
     main()

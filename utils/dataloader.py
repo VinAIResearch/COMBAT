@@ -49,10 +49,12 @@ def get_transform(opt, train=True, pretensor_transform=False):
 class PostTensorTransform(torch.nn.Module):
     def __init__(self, opt):
         super(PostTensorTransform, self).__init__()
-        self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
-        self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
-        if(opt.dataset == 'cifar10'):
-            self.random_horizontal_flip = A.RandomHorizontalFlip(p=0.5)
+        if opt.post_transform_option != "no_use":
+            if not (opt.dataset != "gtsrb" and opt.post_transform_option == "use_modified"):
+                self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
+            self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
+            if(opt.dataset == 'cifar10'):
+                self.random_horizontal_flip = A.RandomHorizontalFlip(p=0.5)
     
     def forward(self, x):
         for module in self.children():

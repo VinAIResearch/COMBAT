@@ -10,7 +10,7 @@ import torchvision.transforms.functional as fn
 from utils.dataloader import get_dataloader, PostTensorTransform
 from utils.utils import progress_bar
 from classifier_models import PreActResNet18, PreActResNet10, ResNet18
-from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST2, NetC_MNIST3, UnetGenerator
+from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST2, NetC_MNIST3, FixedTriggerGenerator
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
@@ -107,28 +107,26 @@ def get_model(opt):
     optimizerG = None
     schedulerG = None
     netF = None
-    netF_eval = None
     
     if(opt.dataset == 'cifar10'):
         # Model
         netC = PreActResNet18().to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = FixedTriggerGenerator(opt).to(opt.device)
     if(opt.dataset == 'gtsrb'):
         # Model
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = FixedTriggerGenerator(opt).to(opt.device)
     if(opt.dataset == 'mnist'):     
         netC = NetC_MNIST3().to(opt.device) #PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
+        netG = FixedTriggerGenerator(opt).to(opt.device)
     if(opt.dataset == 'celeba'):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = FixedTriggerGenerator(opt).to(opt.device)
 
     # Frequency Detector
     F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
     F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
-    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer 
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -136,7 +134,7 @@ def get_model(opt):
     optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True) #Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
     
-    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval
+    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF
 
 
 def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, train_dl, tf_writer, epoch, opt):
@@ -363,7 +361,7 @@ def main():
     test_dl = get_dataloader(opt, False)
         
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF = get_model(opt)
         
     # Load pretrained model
     mode = opt.saving_prefix
@@ -379,15 +377,6 @@ def main():
     state_dict_F = torch.load(opt.F_ckpt_path)
     netF.load_state_dict(state_dict_F['netC'])
     netF.eval()
-    print("Done")
-
-    # Load pretrained FrequencyModel
-    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset, opt.F_model_eval)
-    opt.F_eval_ckpt_path = os.path.join(opt.F_eval_ckpt_folder, '{}_{}_detector.pth.tar'.format(opt.dataset, opt.F_model_eval))
-    print(f"Loading {opt.F_model_eval} at {opt.F_eval_ckpt_path}")
-    state_dict_F_eval = torch.load(opt.F_eval_ckpt_path)
-    netF_eval.load_state_dict(state_dict_F_eval['netC'])
-    netF_eval.eval()
     print("Done")
 
     if(opt.continue_training):
@@ -430,7 +419,7 @@ def main():
                                             netG,
                                             optimizerG, 
                                             schedulerG, 
-                                            netF_eval,
+                                            netF,
                                             test_dl, 
                                             best_clean_acc,
                                             best_bd_acc, best_F_acc, tf_writer, epoch, opt)

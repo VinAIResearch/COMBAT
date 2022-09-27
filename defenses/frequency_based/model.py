@@ -50,3 +50,35 @@ class FrequencyModel(nn.Module):
         for module in self.children():
             x = module(x)
         return x
+
+
+class FrequencyModelDropout(FrequencyModel):
+    def __init__(self, dropout=0.5, *args, **kwargs):
+        super(FrequencyModelDropout, self).__init__(*args, **kwargs)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+
+    def eval(self):
+        self.train(False)
+        self.dropout1.train()
+        self.dropout2.train()
+        self.dropout3.train()
+        return self
+
+
+class FrequencyModelDropoutEnsemble(FrequencyModelDropout):
+    def __init__(self, num_ensemble=3, *args, **kwargs):
+        super(FrequencyModelDropoutEnsemble, self).__init__(*args, **kwargs)
+        self.num_ensemble = num_ensemble
+
+    def forward(self, x):
+        outs = []
+        for _ in range(self.num_ensemble):
+            inp = x
+            for module in self.children():
+                inp = module(inp)
+            outs.append(inp)
+        outs = torch.stack(outs, dim=1)
+        out = outs.mean(dim=1)
+        return out

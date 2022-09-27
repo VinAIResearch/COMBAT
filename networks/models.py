@@ -383,7 +383,7 @@ class GridGenerator(Module):
         f2 = self.bn2_1(self.conv2_1(self.act(f2)))
         f3 = self.bn3_0(self.conv3_0(self.act(f2)))
         f3 = self.bn3_1(self.conv3_1(self.act(f3)))
-        f = F.adaptive_avg_pool2d(f3, 1).reshape((f3.shape[0],-1))
+        f = F.adaptive_avg_pool2d(f3, 1).squeeze()
         f = self.fc1(f)
         f = self.fc2(self.act(f)).reshape((-1, 2, self.S, self.S))
         f = self.tanh(f)
@@ -615,6 +615,17 @@ class CUnetGeneratorv1(Module):
 #        u0 = torch.clamp(self.tanh(self.upconv0_0(self.act(u0))) * 0.05 + x, -1, 1)
 
 #        return u0
+
+
+class FixedTriggerGenerator(Module):
+    def __init__(self, opt):
+        super(FixedTriggerGenerator, self).__init__()
+        noise = torch.rand(opt.input_channel, opt.input_height, opt.input_width)*2 - 1
+        self.trigger = nn.Parameter(noise)
+
+    def forward(self, x):
+        return self.trigger.unsqueeze(0).expand(x.shape[0], -1, -1, -1)
+
 
 #---------------------------- Classifiers ----------------------------#
 

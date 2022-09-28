@@ -23,16 +23,10 @@ def get_transform(opt, train=True):
     if(train):
         transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
         transforms_list.append(transforms.RandomRotation(10))
-        transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
+        transforms_list.append(transforms.RandomHorizontalFlip(p=0.5)) 
     transforms_list.append(transforms.ToTensor())
-    if(opt.dataset == 'cifar10'):
-        transforms_list.append(transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
-    elif(opt.dataset == 'mnist'):
-        transforms_list.append(transforms.Normalize([0.5], [0.5]))
-    elif(opt.dataset == 'gtsrb'):
-        pass
-    else:
-        raise Exception("Invalid Dataset")
+    transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))
+    
     return transforms.Compose(transforms_list)
 
 
@@ -83,15 +77,37 @@ class GTSRB(data.Dataset):
         label = self.labels[index]
         return image, label
 
+class CelebA_attr(data.Dataset):
+    def __init__(self, opt, split, transforms):
+        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
+        self.list_attributes = [18, 31, 21]
+        self.transforms = transforms
+        self.split = split
+
+    def _convert_attributes(self, bool_attributes):
+        return (bool_attributes[0] << 2) + (bool_attributes[1] << 1) + (bool_attributes[2])
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
+        target = self._convert_attributes(target[self.list_attributes])
+        return (input, target)
 
 def get_dataloader(opt, train=True):
     transform = get_transform(opt, train)
     if(opt.dataset == 'gtsrb'):
         dataset = GTSRB(opt, train, transform)
-    elif(opt.dataset == 'mnist'):
-        dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
     elif(opt.dataset == 'cifar10'):
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+    elif opt.dataset == "celeba":
+        if train:
+            split = "train"
+        else:
+            split = "test"
+        dataset = CelebA_attr(opt, split, transform)
     else:
         raise Exception('Invalid dataset')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=True)
@@ -101,10 +117,19 @@ def get_dataloader(opt, train=True):
 def get_dataset(opt, train=True):
     if(opt.dataset == 'gtsrb'):
         dataset = GTSRB(opt, train, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
-    elif(opt.dataset == 'mnist'):
-        dataset = torchvision.datasets.MNIST(opt.data_root, train, transform=ToNumpy(), download=True)
     elif(opt.dataset == 'cifar10'):
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform=ToNumpy(), download=True)
+    elif opt.dataset == "celeba":
+        if train:
+            split = "train"
+        else:
+            split = "test"
+        dataset = CelebA_attr(
+            opt,
+            split,
+            transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()])
+        )
+        
     else:
         raise Exception('Invalid dataset')
     return dataset 

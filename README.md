@@ -5,7 +5,7 @@ This repository contains the code to replicate experiments in our paper **COMBAT
 # Requirements
 - Install required python packages:
 ```
-$ python -m pip install -r requirements.py
+$ python -m pip install -r requirements.txt
 ```
 - Download and re-organize GTSRB dataset from its official website:
 ```

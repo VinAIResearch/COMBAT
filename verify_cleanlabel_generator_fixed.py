@@ -22,9 +22,8 @@ import timm
 
 class ViT(SimpleViT):
     # Adapter for SimpleViT
-    def __init__(self, input_size=32, patch_size=4, n_input=3, *args, **kwargs):
-        patch_size = input_size // 8
-        super().__init__(image_size=input_size, patch_size=patch_size, channels=n_input, *args, **kwargs)
+    def __init__(self, input_size=32, n_input=3, *args, **kwargs):
+        super().__init__(image_size=input_size, channels=n_input, *args, **kwargs)
 
 
 def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
@@ -55,7 +54,15 @@ C_MAPPING_NAMES = {
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
     "efficientnetb0": efficientnet_b0,
-    "vit": partial(ViT, dim=768, depth=6, heads=8, mlp_dim=1024),
+    "vit": partial(ViT, patch_size=4, dim=768, depth=6, heads=8, mlp_dim=1024),
+
+    "simplevitsmall8": partial(ViT, patch_size=8, dim=384, depth=12, heads=6, mlp_dim=384*4),
+    "simplevitsmall4": partial(ViT, patch_size=4, dim=384, depth=12, heads=6, mlp_dim=384*4),
+    "simplevitsmall2": partial(ViT, patch_size=2, dim=384, depth=12, heads=6, mlp_dim=384*4),
+    "simplevitbase8": partial(ViT, patch_size=8, dim=768, depth=12, heads=12, mlp_dim=768*4),
+    "simplevitbase4": partial(ViT, patch_size=4, dim=768, depth=12, heads=12, mlp_dim=768*4),
+    "simplevitbase2": partial(ViT, patch_size=2, dim=768, depth=12, heads=12, mlp_dim=768*4),
+
     "vittiny": vit_tiny,
     "vitsmall": vit_small,
     "vitbase": vit_base,

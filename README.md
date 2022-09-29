@@ -44,7 +44,7 @@ $ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_p
 $ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  
 ```
 # Pretrained models
-We also provide pretrained checkpoints used in the original paper. The checkpoints could be found here (anonymously). You can download and put them in this repository for evaluating.
+We also provide pretrained checkpoints used in the original paper. The checkpoints could be found [here](https://drive.google.com/drive/folders/1YnHTkeSiOzRlXbjd6OKLs9jXHWSikATQ?usp=sharing) (anonymously). You can download and put them in this repository for evaluating.
 
 # Customized attack configurations
 To run other attack configurations (warping-based trigger, input-aware trigger, imperceptible trigger, multiple target labels), follow similar steps mentioned above. For example, to run multiple target labels attack, run the commands:

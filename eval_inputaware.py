@@ -126,7 +126,7 @@ def eval(netC, netG, test_dl, test_dl2, tf_writer, opt):
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
-    tf_writer.add_scalars("Corrected Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "Cross": acc_cross}, epoch)
+    tf_writer.add_scalars("Corrected Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "Cross": acc_cross}, 0)
 
 
 def main():

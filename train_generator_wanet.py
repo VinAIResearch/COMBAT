@@ -317,11 +317,11 @@ def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, test_
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd_ntrg, 1) == targets_bd_ntrg)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             # Evaluate against Frequency Defense
             inputs_F = dct_2d(((inputs_bd + 1) / 2 * 255).byte())
-            targets_F = torch.ones_like(targets)
+            targets_F = torch.ones_like(targets_toChange)
             preds_F = netF(inputs_F)
             total_F_correct += torch.sum(torch.argmax(preds_F, 1) == targets_F)
 

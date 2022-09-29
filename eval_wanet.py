@@ -81,7 +81,7 @@ def eval(netC, netG, test_dl, identity_grid, tf_writer, opt):
     total_bd_correct = 0
 
     criterion_BCE = torch.nn.BCELoss()
-    for batch_idx, (inputs, targets, _) in enumerate(test_dl):
+    for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
 
@@ -106,7 +106,7 @@ def eval(netC, netG, test_dl, identity_grid, tf_writer, opt):
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd_ntrg, 1) == targets_bd_ntrg)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
             acc_bd = total_bd_correct * 100.0 / total_bd_sample
@@ -115,8 +115,7 @@ def eval(netC, netG, test_dl, identity_grid, tf_writer, opt):
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
-    if not epoch % 1:
-        tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd}, 0)
+    tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd}, 0)
 
 
 def main():

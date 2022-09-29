@@ -194,7 +194,7 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, identity_grid, best_clean_
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd_ntrg, 1) == targets_bd_ntrg)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
             acc_bd = total_bd_correct * 100.0 / total_bd_sample

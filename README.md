@@ -14,7 +14,7 @@ $ bash gtsrb_download.sh
 # Training trigger generator and surrogate model 
 Run command
 ```
-$ python train_cleanlabel_generator.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python train_generator.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ``` 
 
 where the parameters are as following:
@@ -28,20 +28,20 @@ The trained checkpoints should be saved at the path `checkpoints\<savingPrefix>_
 # Train victim model
 Run command
 ```
-$ python verify_cleanlabel_generator.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python verify_generator.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```
 The trained checkpoints should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 # Evaluate victim model
 Run command
 ```
-$ python eval_cleanlabel_generator.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python eval.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```
 # Customized attack configurations
 To run other attack configurations (warping-based trigger, input-aware trigger, imperceptible trigger, multiple target labels), follow similar steps mentioned above. For example, to run multiple target labels attack, run the commands:
 ```
-$ python train_cleanlabel_generator_cond.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
-$ python verify_cleanlabel_generator_cond.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
-$ python eval_cleanlabel_generator_cond.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python train_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python verify_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python eval_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```
 # Defense experiments
 We also provide code of defense methods evaluated in the paper inside the folder `defenses`.

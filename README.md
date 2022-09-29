@@ -22,16 +22,16 @@ where the parameters are as following:
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
 
-The trained checkpoints of the generator and surrogate model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
+The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 
 # Train victim model
 Run command
 ```
 $ python train_victim.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
 ```
-`load_checkpoint`: trained generator checkpoints folder name.
+`load_checkpoint`: trained generator checkpoint folder name.
 
-The trained checkpoints of the victim model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
+The trained checkpoint of the victim model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 # Evaluate victim model
 Run command
 ```

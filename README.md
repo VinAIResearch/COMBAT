@@ -40,7 +40,7 @@ $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <trig
 # Sample run
 ```
 $ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_generator_n008_pc05
-$ python train_victim_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoints train_generator_n008_pc05_clean
+$ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoints train_generator_n008_pc05_clean
 $ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  
 ```
 # Pretrained models

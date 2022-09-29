@@ -27,9 +27,9 @@ The trained checkpoints of the generator and surrogate model should be saved at 
 # Train victim model
 Run command
 ```
-$ python train_victim.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoints <trainedCheckpoints>
+$ python train_victim.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
 ```
-`load_checkpoints`: trained generator checkpoints folder name.
+`load_checkpoint`: trained generator checkpoints folder name.
 
 The trained checkpoints of the victim model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 # Evaluate victim model
@@ -40,7 +40,7 @@ $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <trig
 # Sample run
 ```
 $ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_generator_n008_pc05
-$ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoints train_generator_n008_pc05_clean
+$ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoint train_generator_n008_pc05_clean
 $ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  
 ```
 # Pretrained models
@@ -50,7 +50,7 @@ We also provide pretrained checkpoints used in the original paper. The checkpoin
 To run other attack configurations (warping-based trigger, input-aware trigger, imperceptible trigger, multiple target labels), follow similar steps mentioned above. For example, to run multiple target labels attack, run the commands:
 ```
 $ python train_generator_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
-$ python train_victim_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python train_victim_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
 $ python eval_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```
 # Defense experiments

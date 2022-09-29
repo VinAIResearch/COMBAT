@@ -87,22 +87,23 @@ def eval(netC, netG, test_dl, identity_grid, tf_writer, opt):
 
             # Evaluate Clean
             preds_clean = netC(inputs)
+
             total_clean_sample += len(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
             # Evaluate Backdoor
-            noise_grid = netG(inputs)
+            ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
+            inputs_toChange = inputs[ntrg_ind]
+            targets_toChange = targets[ntrg_ind]
+            noise_bd = netG(inputs_toChange)
+
+            noise_grid = netG(inputs_toChange)
             noise_grid = F.upsample(noise_grid, size=opt.input_height, mode="bicubic", align_corners=True).permute((0, 2, 3, 1))
             grid_temps = identity_grid * (1 - opt.grid_rescale) + noise_grid * opt.grid_rescale
             grid_temps = torch.clamp(grid_temps, -1, 1)
-            inputs_bd = F.grid_sample(inputs, grid_temps, align_corners=True)
-            targets_bd = create_targets_bd(targets, opt)
+            inputs_bd = F.grid_sample(inputs_toChange, grid_temps, align_corners=True)
+            targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
-
-            # Exclude samples with clean label == target label
-            ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
-            preds_bd_ntrg = preds_bd[ntrg_ind]
-            targets_bd_ntrg = targets_bd[ntrg_ind]
 
             total_bd_sample += len(ntrg_ind)
             total_bd_correct += torch.sum(torch.argmax(preds_bd_ntrg, 1) == targets_bd_ntrg)

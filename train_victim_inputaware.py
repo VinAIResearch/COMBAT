@@ -156,11 +156,11 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, test_dl2, best_clean_acc, 
     print(" Eval:")
     netC.eval()
 
-    total_sample = 0
+    total_clean_sample = 0
+    total_bd_sample = 0
     total_clean_correct = 0
     total_bd_correct = 0
     total_cross_correct = 0
-    total_ae_loss = 0
 
     l = len(test_dl)
     for batch_idx, batch1, batch2 in zip(range(l), test_dl, test_dl2):
@@ -169,25 +169,39 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, test_dl2, best_clean_acc, 
             inputs2, targets2, _ = batch2
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
             inputs2, targets2 = inputs2.to(opt.device), targets2.to(opt.device)
-            bs = inputs.shape[0]
-            total_sample += bs
+
             # Evaluate Clean
             preds_clean = netC(inputs)
+
+            total_clean_sample += len(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
-            noise_bd = netG(inputs)
-            inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+            # Evaluate Backdoor
+            ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
+            inputs_toChange = inputs[ntrg_ind]
+            targets_toChange = targets[ntrg_ind]
+            noise_bd = netG(inputs_toChange)
+            inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            targets_bd = create_targets_bd(targets_toChange, opt)
+            preds_bd = netC(inputs_bd)
+
+            total_bd_sample += len(ntrg_ind)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
+
+            # Evaluate Cross-trigger accuracy
             noise_bd2 = netG(inputs2)
             inputs_bd2 = torch.clamp(inputs + noise_bd2 * opt.noise_rate, -1, 1)
-            targets_bd = create_targets_bd(targets, opt)
-            preds_bd = netC(inputs_bd)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
             preds_cross = netC(inputs_bd2)
-            total_cross_correct += torch.sum(torch.argmax(preds_cross, 1) == targets)
 
-            acc_clean = total_clean_correct * 100.0 / total_sample
-            acc_bd = total_bd_correct * 100.0 / total_sample
-            acc_cross = total_cross_correct * 100.0 / total_sample
+            # Exclude target-class samples
+            preds_cross_ntrg = preds_cross[ntrg_ind]
+            targets_ntrg = targets[ntrg_ind]
+
+            total_cross_correct += torch.sum(torch.argmax(preds_cross_ntrg, 1) == targets_ntrg)
+
+            acc_clean = total_clean_correct * 100.0 / total_clean_sample
+            acc_bd = total_bd_correct * 100.0 / total_bd_sample
+            acc_cross = total_cross_correct * 100.0 / total_bd_sample
 
             info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f} | Cross Acc: {:.4f} - Best: {:.4f}".format(acc_clean, best_clean_acc, acc_bd, best_bd_acc, acc_cross, best_cross_acc)
             progress_bar(batch_idx, len(test_dl), info_string)

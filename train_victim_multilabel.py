@@ -142,30 +142,39 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
     print(" Eval:")
     netC.eval()
 
-    total_sample = 0
+    total_clean_sample = 0
+    total_bd_sample = 0
     total_clean_correct = 0
     total_bd_correct = 0
-    total_ae_loss = 0
 
     criterion_BCE = torch.nn.BCELoss()
     for batch_idx, (inputs, targets, _) in enumerate(test_dl):
         with torch.no_grad():
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
-            bs = inputs.shape[0]
-            total_sample += bs
+
             # Evaluate Clean
             preds_clean = netC(inputs)
+
+            total_clean_sample += len(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
+            # Evaluate Backdoor
             for ci in range(opt.num_classes):
                 tmp = targets * 0 + ci
                 noise_bd = netG(inputs, tmp)  # + (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
                 inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
                 preds_bd = netC(inputs_bd)
-                total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == tmp)
 
-            acc_clean = total_clean_correct * 100.0 / total_sample
-            acc_bd = total_bd_correct * 100.0 / (total_sample * opt.num_classes)
+                # Exclude samples with clean label == target label
+                ntrg_ind = (targets != tmp).nonzero()[:, 0]
+                preds_bd_ntrg = preds_bd[ntrg_ind]
+                tmp_ntrg = tmp[ntrg_ind]
+
+                total_bd_sample += len(ntrg_ind)
+                total_bd_correct += torch.sum(torch.argmax(preds_bd_ntrg, 1) == tmp_ntrg)
+
+            acc_clean = total_clean_correct * 100.0 / total_clean_sample
+            acc_bd = total_bd_correct * 100.0 / total_bd_sample
 
             info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f}".format(acc_clean, best_clean_acc, acc_bd, best_bd_acc)
             progress_bar(batch_idx, len(test_dl), info_string)

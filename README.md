@@ -56,8 +56,8 @@ The results will be printed on the screen and written in file `<outfileName>.txt
 ```
 $ cd defenses/STRIP
 $ python STRIP.py --dataset <datasetName> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
-The results will be printed on the screen and all entropy values are logged in `results` folder.
 ```
+The results will be printed on the screen and all entropy values are logged in `results` folder.
 - **Neural Cleanse**: Run the command
 ```
 $ cd defenses/neural_cleanse

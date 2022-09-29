@@ -237,7 +237,8 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, trai
         loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
         #loss = loss_ce + epoch *5 * loss_l2 + epoch * 20 * loss_grad_l2 # 0.5*loss_ce + 100*loss_l2
-        loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F
+        loss = loss_ce + epoch * 0.01 * loss_l2 + epoch * 0.04 * loss_grad_l2 + opt.F_weight * loss_F
+        #loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F
         loss.backward()
         optimizerG.step()
 

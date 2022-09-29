@@ -1,19 +1,21 @@
-import torch
 import os
-import torchvision
-import numpy as np
-import cv2
-import torch.nn.functional as F
-from torchvision import transforms
-import matplotlib.pyplot as plt
-from config import get_argument
-from dataloader import get_dataloader, get_dataset
-
 import sys
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
+import torchvision
+from dataloader import get_dataloader, get_dataset
+from torchvision import transforms
+
+from config import get_argument
+
 sys.path.insert(0, "../..")
 from classifier_models import PreActResNet18, ResNet18
+from networks.models import Denormalizer, NetC_MNIST, Normalizer, UnetGenerator
 from utils.utils import progress_bar
-from networks.models import NetC_MNIST, UnetGenerator, Normalizer, Denormalizer
 
 
 class Normalize:
@@ -111,6 +113,7 @@ class STRIP:
     def __call__(self, background, dataset, classifier):
         return self._get_entropy(background, dataset, classifier)
 
+
 def strip(opt, mode="clean"):
 
     # Prepare pretrained classifier
@@ -122,8 +125,8 @@ def strip(opt, mode="clean"):
         netC = ResNet18().to(opt.device)
     else:
         raise Exception("Invalid dataset")
-    
-    if(mode != "clean"):  
+
+    if mode != "clean":
         netG = UnetGenerator(opt).to(opt.device)
         for param in netG.parameters():
             param.requires_grad = False
@@ -250,6 +253,7 @@ def main():
         print("A backdoored model\n")
     else:
         print("Not a backdoor model\n")
+
 
 if __name__ == "__main__":
     main()

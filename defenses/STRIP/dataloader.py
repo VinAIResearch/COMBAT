@@ -1,18 +1,20 @@
-import torch
-import torchvision
-import os
 import csv
-import config
+import os
+
 import numpy as np
-import torchvision.transforms as transforms
+import torch
 import torch.utils.data as data
+import torchvision
+import torchvision.transforms as transforms
 from PIL import Image
 
+import config
 
-class ToNumpy():
+
+class ToNumpy:
     def __call__(self, x):
         x = np.array(x)
-        if(len(x.shape) == 2):
+        if len(x.shape) == 2:
             x = np.expand_dims(x, axis=2)
         return x
 
@@ -20,13 +22,13 @@ class ToNumpy():
 def get_transform(opt, train=True):
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
-    if(train):
+    if train:
         transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
         transforms_list.append(transforms.RandomRotation(10))
-        transforms_list.append(transforms.RandomHorizontalFlip(p=0.5)) 
+        transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
     transforms_list.append(transforms.ToTensor())
     transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))
-    
+
     return transforms.Compose(transforms_list)
 
 
@@ -36,25 +38,25 @@ class GTSRB(data.Dataset):
         if target_label is not None:
             assert target_label < opt.num_classes
         self.num_classes = opt.num_classes
-        if(train):
-            self.data_folder = os.path.join(opt.data_root, 'GTSRB/Train')
+        if train:
+            self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
             self.images, self.labels = self._get_data_train_list()
         else:
-            self.data_folder = os.path.join(opt.data_root, 'GTSRB/Test')
+            self.data_folder = os.path.join(opt.data_root, "GTSRB/Test")
             self.images, self.labels = self._get_data_test_list()
-            
+
         self.transforms = transforms
-        
+
     def _get_data_train_list(self):
-        images = [] 
-        labels = [] 
+        images = []
+        labels = []
         for c in range(0, self.num_classes):
-            prefix = self.data_folder + '/' + format(c, '05d') + '/' 
-            gtFile = open(prefix + 'GT-'+ format(c, '05d') + '.csv') 
-            gtReader = csv.reader(gtFile, delimiter=';') 
-            next(gtReader) 
+            prefix = self.data_folder + "/" + format(c, "05d") + "/"
+            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
+            gtReader = csv.reader(gtFile, delimiter=";")
+            next(gtReader)
             for row in gtReader:
-                images.append(prefix + row[0]) 
+                images.append(prefix + row[0])
                 labels.append(int(row[7]))
             gtFile.close()
         return images, labels
@@ -62,17 +64,17 @@ class GTSRB(data.Dataset):
     def _get_data_test_list(self, target_label=None):
         images = []
         labels = []
-        prefix = os.path.join(self.data_folder, 'GT-final_test.csv')
+        prefix = os.path.join(self.data_folder, "GT-final_test.csv")
         gtFile = open(prefix)
-        gtReader = csv.reader(gtFile, delimiter=';')
+        gtReader = csv.reader(gtFile, delimiter=";")
         next(gtReader)
         l = set(range(0, self.num_classes))
         for row in gtReader:
             if int(row[7]) in l:
-                images.append(self.data_folder + '/' + row[0])
+                images.append(self.data_folder + "/" + row[0])
                 labels.append(int(row[7]))
         return images, labels
-    
+
     def __len__(self):
         return len(self.images)
 
@@ -81,6 +83,7 @@ class GTSRB(data.Dataset):
         image = self.transforms(image)
         label = self.labels[index]
         return image, label
+
 
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
@@ -101,11 +104,12 @@ class CelebA_attr(data.Dataset):
         target = self._convert_attributes(target[self.list_attributes])
         return (input, target)
 
+
 def get_dataloader(opt, train=True):
     transform = get_transform(opt, train)
-    if(opt.dataset == 'gtsrb'):
+    if opt.dataset == "gtsrb":
         dataset = GTSRB(opt, train, transform)
-    elif(opt.dataset == 'cifar10'):
+    elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
     elif opt.dataset == "celeba":
         if train:
@@ -114,30 +118,26 @@ def get_dataloader(opt, train=True):
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
     else:
-        raise Exception('Invalid dataset')
+        raise Exception("Invalid dataset")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=True)
     return dataloader
 
 
 def get_dataset(opt, train=True):
-    if(opt.dataset == 'gtsrb'):
+    if opt.dataset == "gtsrb":
         dataset = GTSRB(opt, train, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
-    elif(opt.dataset == 'cifar10'):
+    elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform=ToNumpy(), download=True)
     elif opt.dataset == "celeba":
         if train:
             split = "train"
         else:
             split = "test"
-        dataset = CelebA_attr(
-            opt,
-            split,
-            transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()])
-        )
-        
+        dataset = CelebA_attr(opt, split, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
+
     else:
-        raise Exception('Invalid dataset')
-    return dataset 
+        raise Exception("Invalid dataset")
+    return dataset
 
 
 def main():
@@ -146,7 +146,7 @@ def main():
     dataloader = get_dataloader(opt, False)
     for item in dataloader:
         images, labels = item
-    
 
-if(__name__ == '__main__'):
+
+if __name__ == "__main__":
     main()

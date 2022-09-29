@@ -1,26 +1,27 @@
-import config
-import torchvision
-import torch
 import os
 import shutil
-import numpy as np
-import torch.nn.functional as F
-import torchvision.transforms.functional as fn
+from glob import glob
 
-from utils.dataloader import get_dataloader, PostTensorTransform
-from utils.utils import progress_bar
-from classifier_models import PreActResNet18, PreActResNet10, ResNet18
-from networks.models import AE, Normalizer, Denormalizer, NetC_MNIST, NetC_MNIST2, NetC_MNIST3, UnetGenerator
+import numpy as np
+import torch
+import torch.nn.functional as F
+import torchvision
+import torchvision.transforms.functional as fn
+from PIL import Image
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import RandomErasing
-from torchvision.transforms.functional import pil_to_tensor
-
 from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchvision.transforms import RandomErasing
+from torchvision.transforms.functional import pil_to_tensor
 from tqdm import tqdm
-from glob import glob
-from PIL import Image
+
+import config
+from classifier_models import PreActResNet10, PreActResNet18, ResNet18
+from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
+                             NetC_MNIST3, Normalizer, UnetGenerator)
+from utils.dataloader import PostTensorTransform, get_dataloader
+from utils.utils import progress_bar
 
 
 class ImgDataset(torch.utils.data.Dataset):
@@ -54,7 +55,7 @@ def eval(test_dl, opt):
         with torch.no_grad():
             psnr.update(img2, img1)
             ssim.update(img2, img1)
-            lpips.update((img2/127.5)-1, (img1/127.5)-1)
+            lpips.update((img2 / 127.5) - 1, (img1 / 127.5) - 1)
 
     psnr_score = psnr.compute()
     ssim_score = ssim.compute()
@@ -70,11 +71,10 @@ def main():
     parser.add_argument("--img_dir", type=str)
     opt = parser.parse_args()
 
-
     print(f"Evaluating image quality: {opt.img_dir}")
     test_dl = torch.utils.data.DataLoader(ImgDataset(opt.img_dir), batch_size=opt.bs, shuffle=False)
     eval(test_dl, opt)
 
 
-if(__name__ == '__main__'):
+if __name__ == "__main__":
     main()

@@ -11,10 +11,10 @@ def get_arguments():
     parser.add_argument('--saving_prefix', type=str, help='Folder in /checkpoints for saving ckpt')
     parser.add_argument('--results', type=str, default='./results')
 
-    parser.add_argument('--dataset', type=str, default='mnist')
-    parser.add_argument('--input_height', type=int, default=None)
-    parser.add_argument('--input_width', type=int, default=None)
-    parser.add_argument('--input_channel', type=int, default=None)
+    parser.add_argument('--dataset', type=str, default='cifar10')
+    parser.add_argument('--input_height', type=int, default=32)
+    parser.add_argument('--input_width', type=int, default=32)
+    parser.add_argument('--input_channel', type=int, default=3)
     parser.add_argument('--num_classes', type=int, default=10)
 
     parser.add_argument('--num_workers', type=int, default=2)

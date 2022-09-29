@@ -39,7 +39,7 @@ $ python eval.py --dataset <datasetName> --attack_mode <attackMode> --pc <poison
 # Customized attack configurations
 To run other attack configurations (warping-based trigger, input-aware trigger, imperceptible trigger, multiple target labels), follow similar steps mentioned above. For example, to run multiple target labels attack, run the commands:
 ```
-$ python train_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python train_generator_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 $ python train_victim_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 $ python eval_multilabel.py --dataset <datasetName> --attack_mode all2all --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```

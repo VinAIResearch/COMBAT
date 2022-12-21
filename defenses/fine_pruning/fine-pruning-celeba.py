@@ -1,18 +1,18 @@
-import torch
-import os
-import torch.nn as nn
 import copy
-import torch.nn.functional as F
-from config import get_arguments
-
-
+import os
 import sys
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from config import get_arguments
+
 sys.path.insert(0, "../..")
+from classifier_models import ResNet18
+from networks.models import AE, Denormalizer, Normalizer, UnetGenerator
 from utils.dataloader import get_dataloader
 from utils.utils import progress_bar
-from classifier_models import ResNet18
-from networks.models import AE, Normalizer, Denormalizer, UnetGenerator
 
 
 def create_targets_bd(targets, opt):
@@ -40,12 +40,12 @@ def convert(mask):
 
 def eval(netC, netG, test_dl, opt):
     print(" Eval:")
-    acc_clean = 0.
-    acc_bd = 0.
+    acc_clean = 0.0
+    acc_bd = 0.0
     total_sample = 0
     total_clean_correct = 0
     total_bd_correct = 0
-    
+
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
@@ -54,17 +54,17 @@ def eval(netC, netG, test_dl, opt):
             # Evaluate Clean
             preds_clean = netC(inputs)
             total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
-            
+
             # Evaluate Backdoor
-            noise_bd = netG(inputs) #+ (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
+            noise_bd = netG(inputs)  # + (pattern[None,:,:,:] - inputs) * mask[None, None, :,:]
             inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
             total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
-            acc_clean = total_clean_correct * 100. / total_sample
-            acc_bd = total_bd_correct * 100. / total_sample
-        
+            acc_clean = total_clean_correct * 100.0 / total_sample
+            acc_bd = total_bd_correct * 100.0 / total_sample
+
         progress_bar(batch_idx, len(test_dl), "Acc Clean: {:.3f} | Acc Bd: {:.3f}".format(acc_clean, acc_bd))
     return acc_clean, acc_bd
 
@@ -72,29 +72,29 @@ def eval(netC, netG, test_dl, opt):
 def main():
     # Prepare arguments
     opt = get_arguments().parse_args()
-    
+
     if opt.dataset == "celeba":
         opt.num_classes = 8
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
-        netC = ResNet18(num_classes = opt.num_classes).to(opt.device)
+        netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     else:
         raise Exception("Invalid Dataset")
 
     mode = opt.saving_prefix
-    path_model = os.path.join(opt.checkpoints, '{}_clean'.format(opt.saving_prefix), opt.dataset, '{}_{}_clean.pth.tar'.format(opt.dataset, opt.saving_prefix))
+    path_model = os.path.join(opt.checkpoints, "{}_clean".format(opt.saving_prefix), opt.dataset, "{}_{}_clean.pth.tar".format(opt.dataset, opt.saving_prefix))
     state_dict = torch.load(path_model)
-    print('load G')
-    netG.load_state_dict(state_dict['netG'])
+    print("load G")
+    netG.load_state_dict(state_dict["netG"])
     netG.to(opt.device)
-    print('load C')
-    netC.load_state_dict(state_dict['netC'])
+    print("load C")
+    netC.load_state_dict(state_dict["netC"])
     netC.to(opt.device)
     netC.eval()
     netC.requires_grad_(False)
-    print(state_dict['best_clean_acc'], state_dict['best_bd_acc'])
+    print(state_dict["best_clean_acc"], state_dict["best_bd_acc"])
 
     # Prepare dataloader
     test_dl = get_dataloader(opt, train=False)
@@ -134,9 +134,7 @@ def main():
                 pruning_mask[channel] = False
             print("Pruned {} filters".format(num_pruned))
 
-            net_pruned.layer4[1].conv2 = nn.Conv2d(
-                pruning_mask.shape[0], pruning_mask.shape[0] - num_pruned, (3, 3), stride=1, padding=1, bias=False
-            )
+            net_pruned.layer4[1].conv2 = nn.Conv2d(pruning_mask.shape[0], pruning_mask.shape[0] - num_pruned, (3, 3), stride=1, padding=1, bias=False)
             net_pruned.linear = nn.Linear(4 * (pruning_mask.shape[0] - num_pruned), 8)
 
             # Re-assigning weight to the pruned net

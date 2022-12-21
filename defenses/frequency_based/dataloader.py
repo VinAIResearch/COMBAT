@@ -1,12 +1,14 @@
-import torch
-import torchvision
-import os
 import csv
-import config
+import os
+
 import numpy as np
-import torchvision.transforms as transforms
+import torch
 import torch.utils.data as data
+import torchvision
+import torchvision.transforms as transforms
 from PIL import Image
+
+import config
 
 
 def get_transform(opt, train=True):
@@ -32,26 +34,26 @@ class GTSRB(data.Dataset):
     def __init__(self, opt, train, transforms):
         super(GTSRB, self).__init__()
         self.num_classes = opt.num_classes
-        if(train):
-            self.data_folder = os.path.join(opt.data_root, 'GTSRB/Train')
+        if train:
+            self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
             self.images, self.labels = self._get_data_train_list()
         else:
-            self.data_folder = os.path.join(opt.data_root, 'GTSRB/Test')
+            self.data_folder = os.path.join(opt.data_root, "GTSRB/Test")
             self.images, self.labels = self._get_data_test_list()
-            
+
         self.transforms = transforms
-        
+
     def _get_data_train_list(self):
-        images = [] 
-        labels = [] 
+        images = []
+        labels = []
         l = list(range(0, self.num_classes))
         for c in l:
-            prefix = self.data_folder + '/' + format(c, '05d') + '/' 
-            gtFile = open(prefix + 'GT-'+ format(c, '05d') + '.csv') 
-            gtReader = csv.reader(gtFile, delimiter=';') 
-            next(gtReader) 
+            prefix = self.data_folder + "/" + format(c, "05d") + "/"
+            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
+            gtReader = csv.reader(gtFile, delimiter=";")
+            next(gtReader)
             for row in gtReader:
-                images.append(prefix + row[0]) 
+                images.append(prefix + row[0])
                 labels.append(int(row[7]))
             gtFile.close()
         return images, labels
@@ -59,17 +61,17 @@ class GTSRB(data.Dataset):
     def _get_data_test_list(self):
         images = []
         labels = []
-        prefix = os.path.join(self.data_folder, 'GT-final_test.csv')
+        prefix = os.path.join(self.data_folder, "GT-final_test.csv")
         gtFile = open(prefix)
-        gtReader = csv.reader(gtFile, delimiter=';')
+        gtReader = csv.reader(gtFile, delimiter=";")
         next(gtReader)
         l = set(range(0, self.num_classes))
         for row in gtReader:
             if int(row[7]) in l:
-                images.append(self.data_folder + '/' + row[0])
+                images.append(self.data_folder + "/" + row[0])
                 labels.append(int(row[7]))
         return images, labels
-    
+
     def __len__(self):
         return len(self.images)
 
@@ -82,17 +84,17 @@ class GTSRB(data.Dataset):
 
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type='attr', download=True)
+        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
         self.list_attributes = [18, 31, 21]
         self.transforms = transforms
         self.split = split
-        
+
     def _convert_attributes(self, bool_attributes):
         return (bool_attributes[0] << 2) + (bool_attributes[1] << 1) + (bool_attributes[2])
-            
+
     def __len__(self):
         return len(self.dataset)
-    
+
     def __getitem__(self, index):
         input, target = self.dataset[index]
         input = self.transforms(input)
@@ -100,22 +102,40 @@ class CelebA_attr(data.Dataset):
         return (input, target)
 
 
+class ImageNet(data.Dataset):
+    def __init__(self, opt, split, transforms):
+        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.transforms = transforms
+        self.split = split
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
+        return (input, target)
+
+
 def get_dataloader(opt, train=True, shuffle=True):
     transform = get_transform(opt, train)
-    if(opt.dataset == 'gtsrb'):
+    if opt.dataset == "gtsrb":
         dataset = GTSRB(opt, train, transform)
-    elif(opt.dataset == 'mnist'):
+    elif opt.dataset == "mnist":
         dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
-    elif(opt.dataset == 'cifar10'):
+    elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
-    elif(opt.dataset == 'celeba'):
-        if(train):
-            split = 'train'
+    elif opt.dataset == "celeba":
+        if train:
+            split = "train"
         else:
-            split = 'test'
+            split = "test"
         dataset = CelebA_attr(opt, split, transform)
+    elif(opt.dataset == 'imagenet10'):
+        split = 'train' if train else 'val'
+        dataset = ImageNet(opt, split, transform)
     else:
-        raise Exception('Invalid dataset')
+        raise Exception("Invalid dataset")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 
@@ -126,7 +146,7 @@ def main():
     dataloader = get_dataloader(opt, False)
     for item in dataloader:
         images, labels = item
-    
 
-if(__name__ == '__main__'):
+
+if __name__ == "__main__":
     main()

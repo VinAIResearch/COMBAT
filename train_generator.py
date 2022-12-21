@@ -124,7 +124,6 @@ def get_model(opt):
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device) 
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
     if opt.dataset == "mnist":
         netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)

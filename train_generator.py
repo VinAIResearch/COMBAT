@@ -126,6 +126,7 @@ def get_model(opt):
         netG = UnetGenerator(opt).to(opt.device) 
     if opt.dataset == "mnist":
         netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
+        clean_model = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
@@ -144,7 +145,7 @@ def get_model(opt):
     optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)  # Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
     optimizer_clean = torch.optim.SGD(clean_model.parameters(), opt.lr_clean, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda)
+    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(optimizer_clean, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda)
 
     return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean
 
@@ -293,7 +294,7 @@ def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clea
 
     # for tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars("Clean Accuracy", {"Clean": avg_acc_clean, "Bd": avg_acc_bd, "F": avg_acc_F, "L2 Loss": avg_loss_l2, "Grad L2 Loss": avg_loss_grad_l2, "F Loss": avg_loss_F}, epoch)
+        tf_writer.add_scalars("Clean Accuracy", {"Clean": avg_acc_clean, "Bd": avg_acc_bd, "F": avg_acc_F, "CleanModel Acc": avg_clean_model_acc, "CleanModel ASR": avg_clean_model_asr, "L2 Loss": avg_loss_l2, "Grad L2 Loss": avg_loss_grad_l2, "F Loss": avg_loss_F, "Clean Model Loss": avg_clean_model_loss}, epoch)
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
@@ -362,7 +363,7 @@ def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean
 
     # tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "F": acc_F, "Clean model ASR": asr_clean_model}, epoch)
+        tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "F": acc_F, "Clean Model Acc": acc_clean_model, "Clean Model ASR": asr_clean_model}, epoch)
 
     # Save checkpoint
     if acc_clean > best_clean_acc or (acc_clean == best_clean_acc and acc_bd > best_bd_acc):

@@ -22,17 +22,20 @@ def get_arguments():
     parser.add_argument("--bs", type=int, default=128)
     parser.add_argument("--lr_C", type=float, default=1e-2)
     parser.add_argument("--lr_G", type=float, default=1e-2)
-    parser.add_argument("--schedulerG_milestones", type=list, default=[100, 200, 300])
+    parser.add_argument("--lr_clean", type=float, default=1e-2)
     parser.add_argument("--schedulerC_milestones", type=list, default=[100, 200, 300])
-    parser.add_argument("--schedulerG_lambda", type=float, default=0.1)
+    parser.add_argument("--schedulerG_milestones", type=list, default=[100, 200, 300])
+    parser.add_argument("--scheduler_clean_milestones", type=list, default=[100, 200, 300])
     parser.add_argument("--schedulerC_lambda", type=float, default=0.1)
+    parser.add_argument("--schedulerG_lambda", type=float, default=0.1)
+    parser.add_argument("--scheduler_clean_lambda", type=float, default=0.1)
     parser.add_argument("--n_iters", type=int, default=300)
-    parser.add_argument("--num_workers", type=float, default=6)
+    parser.add_argument("--num_workers", type=int, default=6)
     parser.add_argument("--lambda_cov", type=float, default=1)
 
-    parser.add_argument("--noise_rate", type=float, default=0.05)
+    parser.add_argument("--noise_rate", type=float, default=0.08)
     parser.add_argument("--target_label", type=int, default=0)
-    parser.add_argument("--pc", type=float, default=0.1)
+    parser.add_argument("--pc", type=float, default=0.5)
     parser.add_argument("--cross_rate", type=float, default=1)
     parser.add_argument("--s", type=int, default=2)
     parser.add_argument("--grid_rescale", type=float, default=0.15)
@@ -57,13 +60,15 @@ def get_arguments():
     parser.add_argument("--F_checkpoints", type=str, default="./defenses/frequency_based/checkpoints")
     parser.add_argument("--F_model", type=str, default="original")
     parser.add_argument("--F_model_eval", type=str, default="original_holdout")
-    parser.add_argument("--F_weight", type=float, default=0.02)
+    parser.add_argument("--F_weight", type=float, default=0.08)
     parser.add_argument("--F_dropout", type=float, default=0.5)
     parser.add_argument("--F_num_ensemble", type=int, default=3)
 
+    parser.add_argument("--clean_model_weight", type=float, default=0.8) # weight of clean model loss
+
     parser.add_argument("--noise_only", action="store_true", default=False)
     parser.add_argument("--post_transform_option", type=str, default="use", choices=["use", "no_use", "use_modified"])
-    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
+    parser.add_argument("--scale_noise_rate", type=float, default=2.0)
 
     parser.add_argument("--cross_weight", type=float, default=0.2)
 

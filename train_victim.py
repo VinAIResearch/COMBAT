@@ -112,6 +112,9 @@ def get_model(opt):
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
+    if(opt.dataset == 'imagenet10'):
+        netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
 
     if opt.model != "default":
         netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
@@ -269,6 +272,13 @@ def main():
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_workers = 40
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 

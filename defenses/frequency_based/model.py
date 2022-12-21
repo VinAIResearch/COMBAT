@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-input_size2scaler = {32: 1, 64: 4}
+input_size2scaler = {32: 1, 64: 4, 224: 49}
 
 
 class FrequencyModel(nn.Module):

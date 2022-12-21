@@ -50,7 +50,7 @@ class Normalizer:
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             normalizer = Normalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "gtsrb2" or opt.dataset == "celeba":
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # None
         else:
             raise Exception("Invalid dataset")
@@ -71,7 +71,7 @@ class Denormalizer:
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             denormalizer = Denormalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "gtsrb2" or opt.dataset == "celeba":
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # None
         else:
             raise Exception("Invalid dataset")
@@ -131,7 +131,7 @@ class AE(Module):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         elif opt.dataset == "mnist":
             denormalizer = Denormalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "celeba":
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")
@@ -142,7 +142,7 @@ class AE(Module):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         elif opt.dataset == "mnist":
             normalizer = Normalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "gtsrb2" or opt.dataset == "celeba":
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")

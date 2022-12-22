@@ -7,41 +7,22 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms.functional as fn
+from kornia.losses import total_variation
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
 
 import config
-from classifier_models import (
-    VGG,
-    DenseNet121,
-    MobileNetV2,
-    PreActResNet10,
-    PreActResNet18,
-    ResNet18,
-)
-from defenses.frequency_based.model import (
-    FrequencyModel,
-    FrequencyModelDropout,
-    FrequencyModelDropoutEnsemble,
-)
-from networks.models import (
-    AE,
-    Denormalizer,
-    NetC_MNIST,
-    NetC_MNIST2,
-    NetC_MNIST3,
-    Normalizer,
-    UnetGenerator,
-)
+from classifier_models import (VGG, DenseNet121, MobileNetV2, PreActResNet10,
+                               PreActResNet18, ResNet18)
+from defenses.frequency_based.model import FrequencyModel
+from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
+                             NetC_MNIST3, Normalizer, UnetGenerator)
 from utils.dataloader import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
 
 F_MAPPING_NAMES = {
     "original": FrequencyModel,
-    "original_holdout": FrequencyModel,
-    "original_dropout": FrequencyModelDropout,
-    "original_dropout_ensemble": FrequencyModelDropoutEnsemble,
     "vgg13": partial(VGG, "VGG13"),
     "densenet121": DenseNet121,
     "mobilenetv2": MobileNetV2,
@@ -141,87 +122,37 @@ def get_model(opt):
         netG = UnetGenerator(opt).to(opt.device)
     if opt.dataset == "mnist":
         netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        clean_model = NetC_MNIST3().to(
-            opt.device
-        )  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
+        clean_model = NetC_MNIST3().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
-    # Frequency Detector
-    F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
-    F_MAPPING_NAMES["original_dropout_ensemble"] = partial(
-        FrequencyModelDropoutEnsemble,
-        dropout=opt.F_dropout,
-        num_ensemble=opt.F_num_ensemble,
-    )
-    netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(
-        opt.device
-    )
-    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](
-        num_classes=2, n_input=opt.input_channel, input_size=opt.input_height
-    ).to(opt.device)
+    netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    netF_eval = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
-    optimizerG = torch.optim.SGD(
-        netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True
-    )  # Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
+    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)  # Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
-    optimizer_clean = torch.optim.SGD(
-        clean_model.parameters(),
-        opt.lr_clean,
-        momentum=0.9,
-        weight_decay=5e-4,
-        nesterov=True,
-    )
-    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer_clean, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda
-    )
+    optimizer_clean = torch.optim.SGD(clean_model.parameters(), opt.lr_clean, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(optimizer_clean, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda)
 
-    return (
-        netC,
-        optimizerC,
-        schedulerC,
-        netG,
-        optimizerG,
-        schedulerG,
-        netF,
-        netF_eval,
-        clean_model,
-        optimizer_clean,
-        scheduler_clean,
-    )
+    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean
 
 
-def train(
-    netC,
-    optimizerC,
-    schedulerC,
-    netG,
-    optimizerG,
-    schedulerG,
-    netF,
-    clean_model,
-    optimizer_clean,
-    scheduler_clean,
-    train_dl,
-    tf_writer,
-    epoch,
-    opt,
-):
+def train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model, optimizer_clean, scheduler_clean, train_dl, tf_writer, epoch, opt):
     torch.autograd.set_detect_anomaly(True)
     print(" Train:")
     netC.train()
-
     rate_bd = opt.pc
     total_loss_ce = 0
     total_loss_grad_l2 = 0
     total_loss_l2 = 0
     total_loss_F = 0
+    total_loss_tv = 0
     total_clean_model_loss = 0
     total_sample = 0
 
@@ -262,14 +193,7 @@ def train(
         inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
         total_inputs = torch.cat([inputs_bd, inputs[trg_ind[num_bd:]], inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
-        total_targets = torch.cat(
-            [
-                bd_targets[trg_ind[:num_bd]],
-                targets[trg_ind[num_bd:]],
-                targets[ntrg_ind],
-            ],
-            dim=0,
-        )
+        total_targets = torch.cat([bd_targets[trg_ind[:num_bd]], targets[trg_ind[num_bd:]], targets[ntrg_ind]], dim=0)
         total_preds = netC(total_inputs)
 
         loss_ce = criterion_CE(total_preds, total_targets)
@@ -302,20 +226,14 @@ def train(
         pred_clean = netC(transforms(inputs))
         pred_bd = netC(transforms(inputs_bd))
 
-        # Classification loss
-        loss_ce = criterion_CE(pred_bd, bd_targets)
+        # loss_ce = criterion_CE(pred_clean, targets) + 50 * criterion_CE(pred_bd, bd_targets)  # Classification loss
+        loss_ce = criterion_CE(pred_bd, bd_targets)  # Classification loss
         if torch.isnan(total_preds).any() or torch.isnan(total_targets).any():
             print(total_preds, total_targets)
         loss_l2 = criterion_L2(inputs_bd, inputs)  # L2 loss
         inputs_ext = F.pad(inputs, (1, 1, 2, 1))
         inputs_bd_ext = F.pad(inputs_bd, (1, 1, 2, 1))
-        loss_grad_l2 = criterion_L2(
-            inputs_ext[:, :, 1:] - inputs_ext[:, :, :-1],
-            inputs_bd_ext[:, :, 1:] - inputs_bd_ext[:, :, :-1],
-        ) + criterion_L2(
-            inputs_ext[:, :, :, 1:] - inputs_ext[:, :, :, :-1],
-            inputs_bd_ext[:, :, :, 1:] - inputs_bd_ext[:, :, :, :-1],
-        )  # Gradient loss
+        loss_grad_l2 = criterion_L2(inputs_ext[:, :, 1:] - inputs_ext[:, :, :-1], inputs_bd_ext[:, :, 1:] - inputs_bd_ext[:, :, :-1]) + criterion_L2(inputs_ext[:, :, :, 1:] - inputs_ext[:, :, :, :-1], inputs_bd_ext[:, :, :, 1:] - inputs_bd_ext[:, :, :, :-1])  # Gradient loss
 
         # Loss F
         inputs_F = dct_2d((inputs_bd + 1) / 2 * 255)
@@ -323,13 +241,17 @@ def train(
         pred_F = netF(inputs_F)
         loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
+        # Loss TV
+        if opt.noise_only:
+            loss_tv = total_variation(noise_bd).mean()
+        else:
+            loss_tv = total_variation(inputs_bd).mean()
+
         # Clean Model Loss
         clean_model_preds = clean_model(transforms(inputs_bd))
         clean_model_loss = criterion_CE(clean_model_preds, targets)
 
-        loss = (
-            loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.clean_model_weight * clean_model_loss
-        )  # + loss_grad_l2
+        loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.tv_weight * loss_tv + opt.clean_model_weight * clean_model_loss  # + loss_grad_l2
         loss.backward()
         optimizerG.step()
 
@@ -338,6 +260,7 @@ def train(
         total_loss_l2 += loss_l2.detach()
         total_loss_grad_l2 += loss_grad_l2.detach()
         total_loss_F += loss_F.detach()
+        total_loss_tv += loss_tv.detach()
         total_clean_model_loss += clean_model_loss.detach()
         total_clean_correct += torch.sum(torch.argmax(pred_clean, dim=1) == targets)
         total_bd_correct += torch.sum(torch.argmax(pred_bd, dim=1) == bd_targets)
@@ -354,24 +277,16 @@ def train(
         avg_loss_l2 = total_loss_l2 / total_sample
         avg_loss_grad_l2 = total_loss_grad_l2 / total_sample
         avg_loss_F = total_loss_F / total_sample
+        avg_loss_tv = total_loss_tv / total_sample
         avg_clean_model_loss = total_clean_model_loss / total_sample
-        progress_bar(
-            batch_idx,
-            len(train_dl),
-            "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f} | Clean Model Acc: {:.4f} | Clean Model ASR: {:.4f}".format(
-                avg_acc_clean,
-                avg_acc_bd,
-                avg_acc_F,
-                avg_clean_model_acc,
-                avg_clean_model_asr,
-            ),
-        )
+        # progress_bar(batch_idx, len(train_dl), "CE Loss: {:.4f} | L2 Loss: {:.6f}  | GL2 Loss: {:.6f} | F Loss: {:.6f} | TV Loss: {:.6f} | Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f}".format(avg_loss_ce, avg_loss_l2, avg_loss_grad_l2, avg_loss_F, avg_loss_tv, avg_acc_clean, avg_acc_bd, avg_acc_F))
+        progress_bar(batch_idx, len(train_dl), "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f} | Clean Model Acc: {:.4f} | Clean Model ASR: {:.4f}".format(avg_acc_clean, avg_acc_bd, avg_acc_F, avg_clean_model_acc, avg_clean_model_asr))
 
         # Save image for debugging
         if not batch_idx % 5:
             if not os.path.exists(opt.temps):
                 create_dir(opt.temps)
-            path = os.path.join(opt.temps, "samples.png")
+            path = os.path.join(opt.temps, 'samples.png')
             batch_img = torch.cat([inputs, inputs_bd], dim=2)
             torchvision.utils.save_image(batch_img, path, normalize=True)
 
@@ -381,21 +296,7 @@ def train(
 
     # for tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars(
-            "Clean Accuracy",
-            {
-                "Clean": avg_acc_clean,
-                "Bd": avg_acc_bd,
-                "F": avg_acc_F,
-                "CleanModel Acc": avg_clean_model_acc,
-                "CleanModel ASR": avg_clean_model_asr,
-                "L2 Loss": avg_loss_l2,
-                "Grad L2 Loss": avg_loss_grad_l2,
-                "F Loss": avg_loss_F,
-                "CleanModel Loss": avg_clean_model_loss,
-            },
-            epoch,
-        )
+        tf_writer.add_scalars("Clean Accuracy", {"Clean": avg_acc_clean, "Bd": avg_acc_bd, "F": avg_acc_F, "CleanModel Acc": avg_clean_model_acc, "CleanModel ASR": avg_clean_model_asr, "L2 Loss": avg_loss_l2, "Grad L2 Loss": avg_loss_grad_l2, "F Loss": avg_loss_F, "TV Loss": avg_loss_tv, "CleanModel Loss": avg_clean_model_loss}, epoch)
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
@@ -403,27 +304,7 @@ def train(
     schedulerG.step()
 
 
-def eval(
-    netC,
-    optimizerC,
-    schedulerC,
-    netG,
-    optimizerG,
-    schedulerG,
-    netF,
-    clean_model,
-    optimizer_clean,
-    scheduler_clean,
-    test_dl,
-    best_clean_acc,
-    best_bd_acc,
-    best_F_acc,
-    best_clean_model_acc,
-    best_clean_model_asr,
-    tf_writer,
-    epoch,
-    opt,
-):
+def eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model, optimizer_clean, scheduler_clean, test_dl, best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_asr, tf_writer, epoch, opt):
     print(" Eval:")
     netC.eval()
 
@@ -435,6 +316,7 @@ def eval(
     total_clean_model_correct = 0
     total_clean_model_bd_correct = 0
 
+    criterion_BCE = torch.nn.BCELoss()
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
@@ -451,11 +333,7 @@ def eval(
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
             if opt.dataset == "gtsrb":
-                inputs_bd = torch.clamp(
-                    inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate,
-                    -1,
-                    1,
-                )
+                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
             else:
                 inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
             targets_bd = create_targets_bd(targets_toChange, opt)
@@ -480,36 +358,15 @@ def eval(
             acc_bd = total_bd_correct * 100.0 / total_bd_sample
             acc_F = total_F_correct * 100.0 / total_bd_sample
 
-            acc_clean_model = total_clean_model_correct * 100.0 / total_clean_sample
+            acc_clean_model =  total_clean_model_correct * 100.0 / total_clean_sample
             asr_clean_model = total_clean_model_bd_correct * 100.0 / total_bd_sample
 
-            info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f} | F Acc: {:.4f} - Best: {:.4f} | Clean Model BA: {:.4f} - Best: {:.4f} | Clean Model ASR: {:.4f} - Best: {:.4f}".format(
-                acc_clean,
-                best_clean_acc,
-                acc_bd,
-                best_bd_acc,
-                acc_F,
-                best_F_acc,
-                acc_clean_model,
-                best_clean_model_acc,
-                asr_clean_model,
-                best_clean_model_asr,
-            )
+            info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f} | F Acc: {:.4f} - Best: {:.4f} | Clean Model BA: {:.4f} - Best: {:.4f} | Clean Model ASR: {:.4f} - Best: {:.4f}".format(acc_clean, best_clean_acc, acc_bd, best_bd_acc, acc_F, best_F_acc, acc_clean_model, best_clean_model_acc, asr_clean_model, best_clean_model_asr)
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars(
-            "Test Accuracy",
-            {
-                "Clean": acc_clean,
-                "Bd": acc_bd,
-                "F": acc_F,
-                "Clean Model Acc": acc_clean_model,
-                "Clean Model ASR": asr_clean_model,
-            },
-            epoch,
-        )
+        tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "F": acc_F, "Clean Model Acc": acc_clean_model, "Clean Model ASR": asr_clean_model}, epoch)
 
     # Save checkpoint
     if acc_clean > best_clean_acc or (acc_clean == best_clean_acc and acc_bd > best_bd_acc):
@@ -519,31 +376,9 @@ def eval(
         best_F_acc = acc_F
         best_clean_model_acc = acc_clean_model
         best_clean_model_asr = asr_clean_model
-        state_dict = {
-            "netC": netC.state_dict(),
-            "schedulerC": schedulerC.state_dict(),
-            "optimizerC": optimizerC.state_dict(),
-            "netG": netG.state_dict(),
-            "schedulerG": schedulerG.state_dict(),
-            "optimizerG": optimizerG.state_dict(),
-            "clean_model": clean_model.state_dict(),
-            "scheduler_clean": scheduler_clean.state_dict(),
-            "optimizer_clean": optimizer_clean.state_dict(),
-            "best_clean_acc": acc_clean,
-            "best_bd_acc": acc_bd,
-            "best_F_acc": acc_F,
-            "best_clean_model_acc": best_clean_model_acc,
-            "best_clean_model_asr": best_clean_model_asr,
-            "epoch_current": epoch,
-        }
+        state_dict = {"netC": netC.state_dict(), "schedulerC": schedulerC.state_dict(), "optimizerC": optimizerC.state_dict(), "netG": netG.state_dict(), "schedulerG": schedulerG.state_dict(), "optimizerG": optimizerG.state_dict(), "clean_model": clean_model.state_dict(), "scheduler_clean": scheduler_clean.state_dict(), "optimizer_clean": optimizer_clean.state_dict(), "best_clean_acc": acc_clean, "best_bd_acc": acc_bd, "best_F_acc": acc_F, "best_clean_model_acc": best_clean_model_acc, "best_clean_model_asr": best_clean_model_asr, "epoch_current": epoch}
         torch.save(state_dict, opt.ckpt_path)
-    return (
-        best_clean_acc,
-        best_bd_acc,
-        best_F_acc,
-        best_clean_model_acc,
-        best_clean_model_asr,
-    )
+    return best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_asr
 
 
 def main():
@@ -575,19 +410,7 @@ def main():
     test_dl = get_dataloader(opt, False)
 
     # prepare model
-    (
-        netC,
-        optimizerC,
-        schedulerC,
-        netG,
-        optimizerG,
-        schedulerG,
-        netF,
-        netF_eval,
-        clean_model,
-        optimizer_clean,
-        scheduler_clean,
-    ) = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean = get_model(opt)
 
     # Load pretrained model
     mode = opt.saving_prefix
@@ -597,7 +420,7 @@ def main():
     create_dir(opt.log_dir)
 
     # Load pretrained FrequencyModel
-    opt.F_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset)
+    opt.F_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset, opt.F_model)
     opt.F_ckpt_path = os.path.join(opt.F_ckpt_folder, "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model))
     print(f"Loading {opt.F_model} at {opt.F_ckpt_path}")
     state_dict_F = torch.load(opt.F_ckpt_path)
@@ -606,11 +429,8 @@ def main():
     print("Done")
 
     # Load pretrained FrequencyModel
-    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset)
-    opt.F_eval_ckpt_path = os.path.join(
-        opt.F_eval_ckpt_folder,
-        "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model),
-    )
+    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset, opt.F_model_eval)
+    opt.F_eval_ckpt_path = os.path.join(opt.F_eval_ckpt_folder, "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model_eval))
     print(f"Loading {opt.F_model_eval} at {opt.F_eval_ckpt_path}")
     state_dict_F_eval = torch.load(opt.F_eval_ckpt_path)
     netF_eval.load_state_dict(state_dict_F_eval["netC"])
@@ -627,7 +447,6 @@ def main():
             netG.load_state_dict(state_dict["netG"])
             optimizerG.load_state_dict(state_dict["optimizerG"])
             schedulerG.load_state_dict(state_dict["schedulerG"])
-            clean_model.load_state_dict(state_dict["clean_model"])
             optimizer_clean.load_state_dict(state_dict["optimizer_clean"])
             scheduler_clean.load_state_dict(state_dict["scheduler_clean"])
 
@@ -657,43 +476,8 @@ def main():
 
     for epoch in range(epoch_current, opt.n_iters):
         print("Epoch {}:".format(epoch + 1))
-        train(
-            netC,
-            optimizerC,
-            schedulerC,
-            netG,
-            optimizerG,
-            schedulerG,
-            netF,
-            clean_model,
-            optimizer_clean,
-            scheduler_clean,
-            train_dl,
-            tf_writer,
-            epoch,
-            opt,
-        )
-        (best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_asr,) = eval(
-            netC,
-            optimizerC,
-            schedulerC,
-            netG,
-            optimizerG,
-            schedulerG,
-            netF_eval,
-            clean_model,
-            optimizer_clean,
-            scheduler_clean,
-            test_dl,
-            best_clean_acc,
-            best_bd_acc,
-            best_F_acc,
-            best_clean_model_acc,
-            best_clean_model_asr,
-            tf_writer,
-            epoch,
-            opt,
-        )
+        train(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model, optimizer_clean, scheduler_clean, train_dl, tf_writer, epoch, opt)
+        best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_asr = eval(netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF_eval, clean_model, optimizer_clean, scheduler_clean, test_dl, best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_asr, tf_writer, epoch, opt)
 
 
 if __name__ == "__main__":

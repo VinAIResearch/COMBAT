@@ -97,7 +97,7 @@ class PreActResNet(nn.Module):
         return out
 
 
-input_size2scaler = {32: 1, 64: 4}
+input_size2scaler = {32: 1, 64: 4, 224: 49}
 
 
 def PreActResNet18(num_classes=10, n_input=3, input_size=32):

@@ -290,6 +290,11 @@ def main():
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
     else:
         raise Exception("Invalid Dataset")
 

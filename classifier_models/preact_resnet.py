@@ -97,12 +97,39 @@ class PreActResNet(nn.Module):
         return out
 
 
+class PreActResNetDropout(PreActResNet):
+    def __init__(self, *args, **kwargs):
+        super(PreActResNetDropout, self).__init__(*args, **kwargs)
+        self.dropout = nn.Dropout(0.5)
+
+    def eval(self):
+        self.train(False)
+        self.dropout.train()
+        return self
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.dropout(out)
+        out = self.avgpool(out)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
+
 input_size2scaler = {32: 1, 64: 4, 224: 49}
 
 
 def PreActResNet18(num_classes=10, n_input=3, input_size=32):
     scaler = input_size2scaler[input_size]
     return PreActResNet(PreActBlock, [2, 2, 2, 2], num_classes=num_classes, n_input=n_input, scaler=scaler)
+
+def PreActResNetDropout18(num_classes=10, n_input=3, input_size=32):
+    scaler = input_size2scaler[input_size]
+    return PreActResNetDropout(PreActBlock, [2, 2, 2, 2], num_classes=num_classes, n_input=n_input, scaler=scaler)
 
 
 def PreActResNet10(num_classes=10, n_input=3, input_size=32):

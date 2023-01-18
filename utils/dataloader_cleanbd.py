@@ -256,6 +256,8 @@ class ImageNet(data.Dataset):
 class PoisonedDataset(data.Dataset):
     def __init__(self, refdata, n_classes, opt):
         self.dataset = refdata
+        if opt.debug:
+            self.dataset = torch.utils.data.Subset(self.dataset, range(1000))
         if opt.attack_mode == "all2one":
             target_label = {opt.target_label}
         else:
@@ -304,6 +306,8 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=
         dataset = PoisonedDataset(ImageNet(opt, split, transform), opt.num_classes, opt)
     else:
         raise Exception("Invalid dataset")
+    if opt.debug:
+        dataset = torch.utils.data.Subset(dataset, range(1000))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 

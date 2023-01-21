@@ -245,6 +245,8 @@ def main():
     else:
         raise Exception("Invalid Dataset")
 
+    opt.num_workers = 0
+
     # Dataset
     train_dl = get_dataloader(opt, True)
     test_dl = get_dataloader(opt, False)

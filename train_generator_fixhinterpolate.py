@@ -180,7 +180,6 @@ def get_model(opt):
     optimizerG = None
     schedulerG = None
     netF = None
-    netF_eval = None
     clean_model = None
 
     if opt.dataset == "cifar10":
@@ -214,7 +213,6 @@ def get_model(opt):
     F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
 
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
-    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
@@ -222,7 +220,7 @@ def get_model(opt):
     optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
 
-    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model
+    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model
 
 
 def train(
@@ -247,7 +245,7 @@ def train(
     total_loss_ce = 0
     total_loss_grad_l2 = 0
     total_loss_l2 = 0
-    total_loss_F = 0
+    # total_loss_F = 0
     total_clean_model_loss = 0
     total_sample = 0
 
@@ -286,6 +284,8 @@ def train(
         #   continue
         inputs_toChange = inputs[trg_ind[:num_bd]]
         noise_bd = netG(inputs_toChange)
+        noise_bd = F.interpolate(noise_bd, scale_factor=opt.scale_factor, mode=opt.scale_mode)  # Scale down
+        noise_bd = F.interpolate(noise_bd, (opt.input_height, opt.input_width), mode=opt.scale_mode)  # Then scale up
         inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
         total_inputs = torch.cat([inputs_bd, inputs[trg_ind[num_bd:]], inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
@@ -326,6 +326,8 @@ def train(
 
         # Create backdoor data
         noise_bd = netG(inputs)
+        noise_bd = F.interpolate(noise_bd, scale_factor=opt.scale_factor, mode=opt.scale_mode)  # Scale down
+        noise_bd = F.interpolate(noise_bd, (opt.input_height, opt.input_width), mode=opt.scale_mode)  # Then scale up
         inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
         pred_clean = netC(transforms(inputs))
         pred_bd = netC(transforms(inputs_bd))
@@ -345,19 +347,17 @@ def train(
             inputs_bd_ext[:, :, :, 1:] - inputs_bd_ext[:, :, :, :-1],
         )  # Gradient loss
 
-        # Loss F
+        # # Loss F
         inputs_F = dct_2d((inputs_bd + 1) / 2 * 255)
         F_targets = torch.ones_like(targets)
         pred_F = netF(inputs_F)
-        loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
+        # loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
         # Clean Model Loss
         clean_model_preds = clean_model(transforms(inputs_bd))
         clean_model_loss = criterion_CE(clean_model_preds, targets)
 
-        loss = (
-            loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.clean_model_weight * clean_model_loss
-        )  # + loss_grad_l2
+        loss = loss_ce + opt.L2_weight * loss_l2 + opt.clean_model_weight * clean_model_loss
         loss.backward()
         optimizerG.step()
 
@@ -365,7 +365,7 @@ def train(
         total_loss_ce += loss_ce.detach()
         total_loss_l2 += loss_l2.detach()
         total_loss_grad_l2 += loss_grad_l2.detach()
-        total_loss_F += loss_F.detach()
+        # total_loss_F += loss_F.detach()
         total_clean_model_loss += clean_model_loss.detach()
         total_clean_correct += torch.sum(torch.argmax(pred_clean, dim=1) == targets)
         total_bd_correct += torch.sum(torch.argmax(pred_bd, dim=1) == bd_targets)
@@ -383,7 +383,7 @@ def train(
         avg_loss_ce = total_loss_ce / total_sample
         avg_loss_l2 = total_loss_l2 / total_sample
         avg_loss_grad_l2 = total_loss_grad_l2 / total_sample
-        avg_loss_F = total_loss_F / total_sample
+        # avg_loss_F = total_loss_F / total_sample
         avg_clean_model_loss = total_clean_model_loss / total_sample
         progress_bar(
             batch_idx,
@@ -411,7 +411,7 @@ def train(
                 "CleanModel Bd ASR": avg_clean_model_bd_asr,
                 "L2 Loss": avg_loss_l2,
                 "Grad L2 Loss": avg_loss_grad_l2,
-                "F Loss": avg_loss_F,
+                # "F Loss": avg_loss_F,
                 "CleanModel Loss": avg_clean_model_loss,
             },
             epoch,
@@ -615,7 +615,7 @@ def main():
     test_dl = get_dataloader(opt, False)
 
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model = get_model(opt)
 
     # Load pretrained model
     mode = opt.saving_prefix
@@ -631,15 +631,6 @@ def main():
     state_dict_F = torch.load(opt.F_ckpt_path)
     netF.load_state_dict(state_dict_F["netC"])
     netF.eval()
-    print("Done")
-
-    # Load pretrained FrequencyModel
-    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset)
-    opt.F_eval_ckpt_path = os.path.join(opt.F_eval_ckpt_folder, opt.F_model_eval, "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model_eval))
-    print(f"Loading {opt.F_model_eval} at {opt.F_eval_ckpt_path}")
-    state_dict_F_eval = torch.load(opt.F_eval_ckpt_path)
-    netF_eval.load_state_dict(state_dict_F_eval["netC"])
-    netF_eval.eval()
     print("Done")
 
     # Load clean_model
@@ -713,7 +704,7 @@ def main():
             netG,
             optimizerG,
             schedulerG,
-            netF_eval,
+            netF,
             clean_model,
             test_dl,
             best_clean_acc,

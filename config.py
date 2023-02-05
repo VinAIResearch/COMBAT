@@ -70,10 +70,14 @@ def get_arguments():
 
     parser.add_argument("--noise_only", action="store_true", default=False)
     parser.add_argument("--post_transform_option", type=str, default="use", choices=["use", "no_use", "use_modified"])
-    parser.add_argument("--scale_noise_rate", type=float, default=2.0)
+    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
 
     parser.add_argument("--cross_weight", type=float, default=0.2)
 
     parser.add_argument("--debug", action="store_true", default=False)
+
+    parser.add_argument("--r", type=float, default=1/4)
+    parser.add_argument("--scale_factor", type=float, default=0.5)
+    parser.add_argument("--scale_mode", type=str, default="bicubic")
 
     return parser

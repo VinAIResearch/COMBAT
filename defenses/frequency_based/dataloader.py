@@ -131,11 +131,13 @@ def get_dataloader(opt, train=True, shuffle=True):
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
-    elif(opt.dataset == 'imagenet10'):
+    elif(opt.dataset in ['imagenet10', 'imagenet10small']):
         split = 'train' if train else 'val'
         dataset = ImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
+    if opt.debug:
+        dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 

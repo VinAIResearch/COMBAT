@@ -23,5 +23,7 @@ def get_arguments():
     parser.add_argument("--continue_training", action="store_true")
     parser.add_argument("--load_checkpoint", default="../../checkpoints")
     parser.add_argument("--saving_prefix", type=str, help="Folder in /checkpoints for saving ckpt")
+    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
+    parser.add_argument("--debug", action="store_true", default=False)
 
     return parser

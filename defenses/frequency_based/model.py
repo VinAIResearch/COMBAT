@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-input_size2scaler = {32: 1, 64: 4, 224: 49}
+input_size2scaler = {32: 1, 64: 4, 112: 12.25, 224: 49}
 
 
 class FrequencyModel(nn.Module):
@@ -44,7 +44,7 @@ class FrequencyModel(nn.Module):
         self.dropout3 = nn.Dropout(0.2)
 
         self.flatten = nn.Flatten()
-        self.linear6 = nn.Linear(2048 * scaler, num_classes)
+        self.linear6 = nn.Linear(round(2048 * scaler), num_classes)
 
     def forward(self, x):
         for module in self.children():

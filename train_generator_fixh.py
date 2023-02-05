@@ -10,6 +10,9 @@ import torchvision.transforms.functional as fn
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
+import timm
+from vit_pytorch import SimpleViT
+from torchvision.models import efficientnet_b0
 
 import config
 from classifier_models import (
@@ -18,6 +21,7 @@ from classifier_models import (
     MobileNetV2,
     PreActResNet10,
     PreActResNet18,
+    PreActResNetDropout18,
     ResNet18,
 )
 from defenses.frequency_based.model import (
@@ -36,6 +40,56 @@ from networks.models import (
 )
 from utils.dataloader import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+
+
+class ViT(SimpleViT):
+    # Adapter for SimpleViT
+    def __init__(self, input_size=32, n_input=3, *args, **kwargs):
+        super().__init__(image_size=input_size, channels=n_input, *args, **kwargs)
+
+
+def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Tiny (Vit-Ti)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_tiny_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Small (ViT-S)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_small_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Base (ViT-B)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_base_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+C_MAPPING_NAMES = {
+    "preactresnet10": PreActResNet10,
+    "preactresnetdropout18": PreActResNetDropout18,
+    "vgg13": partial(VGG, "VGG13"),
+    "mobilenetv2": MobileNetV2,
+    "efficientnetb0": efficientnet_b0,
+    "vit": partial(ViT, patch_size=4, dim=768, depth=6, heads=8, mlp_dim=1024),
+    "simplevitsmall8": partial(ViT, patch_size=8, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitsmall4": partial(ViT, patch_size=4, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitsmall2": partial(ViT, patch_size=2, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitbase8": partial(ViT, patch_size=8, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "simplevitbase4": partial(ViT, patch_size=4, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "simplevitbase2": partial(ViT, patch_size=2, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "vittiny": vit_tiny,
+    "vitsmall": vit_small,
+    "vitbase": vit_base,
+}
+
 
 F_MAPPING_NAMES = {
     "original": FrequencyModel,
@@ -145,6 +199,15 @@ def get_model(opt):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
+    if(opt.dataset in ['imagenet10', 'imagenet10small']):
+        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
+
+    if opt.model != "default":
+        netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    if opt.model_clean != "default":
+        clean_model = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Frequency Detector
     F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
@@ -335,18 +398,6 @@ def train(
             ),
         )
 
-        # Save image for debugging
-        if not batch_idx % 5:
-            if not os.path.exists(opt.temps):
-                create_dir(opt.temps)
-            path = os.path.join(opt.temps, "samples.png")
-            batch_img = torch.cat([inputs, inputs_bd], dim=2)
-            torchvision.utils.save_image(batch_img, path, normalize=True)
-
-            if denormalizer is not None:
-                batch_img = denormalizer(batch_img)
-            grid = torchvision.utils.make_grid(batch_img, normalize=True)
-
     # for tensorboard
     if not epoch % 1:
         tf_writer.add_scalars(
@@ -365,6 +416,12 @@ def train(
             },
             epoch,
         )
+
+    if not epoch % 20:
+        batch_img = torch.cat([inputs, inputs_bd], dim=2)
+        if denormalizer is not None:
+            batch_img = denormalizer(batch_img)
+        grid = torchvision.utils.make_grid(batch_img, normalize=True)
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
@@ -526,7 +583,8 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-        opt.num_classes = 13
+        if opt.num_classes != 43:
+            opt.num_classes = 13
     elif opt.dataset == "mnist":
         opt.input_height = 32
         opt.input_width = 32
@@ -537,6 +595,18 @@ def main():
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
+        opt.bs = 32
+    elif(opt.dataset == 'imagenet10small'):
+        opt.input_height = 112
+        opt.input_width = 112
+        opt.input_channel = 3
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 

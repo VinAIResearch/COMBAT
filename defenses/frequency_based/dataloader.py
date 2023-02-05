@@ -131,7 +131,7 @@ def get_dataloader(opt, train=True, shuffle=True):
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
-    elif(opt.dataset == 'imagenet10'):
+    elif(opt.dataset in ['imagenet10', 'imagenet10small']):
         split = 'train' if train else 'val'
         dataset = ImageNet(opt, split, transform)
     else:

@@ -92,15 +92,13 @@ def get_model(opt):
     netG = None
 
     if opt.dataset == "cifar10":
-        # Model
         netC = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     if opt.dataset == "gtsrb":
-        # Model
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     if opt.dataset == "mnist":
-        netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
+        netC = NetC_MNIST3().to(opt.device)
         netG = UnetGenerator(opt, in_channels=1).to(opt.device)
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
@@ -118,7 +116,8 @@ def eval(netC, netG, test_dl, tf_writer, opt):
     total_clean_sample = 0
     total_bd_sample = 0
     total_clean_correct = 0
-    total_bd_correct = 0
+    total_bd_ba = 0
+    total_bd_asr = 0
 
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
@@ -143,16 +142,18 @@ def eval(netC, netG, test_dl, tf_writer, opt):
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
+            total_bd_ba += torch.sum(torch.argmax(preds_bd, 1) == targets_toChange)
+            total_bd_asr += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
-            acc_bd = total_bd_correct * 100.0 / total_bd_sample
+            acc_bd_ba = total_bd_ba * 100.0 / total_bd_sample
+            acc_bd_asr = total_bd_asr * 100.0 / total_bd_sample
 
-            info_string = "Clean Acc: {:.4f} | Bd Acc: {:.4f}".format(acc_clean, acc_bd)
+            info_string = "Clean Acc: {:.4f} | Bd BA: {:.4f} | Bd ASR: {:.4f}".format(acc_clean, acc_bd_ba, acc_bd_asr)
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
-    tf_writer.add_scalars("Corrected Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd}, 0)
+    tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd BA": acc_bd_ba, "Bd ASR": acc_bd_asr}, 0)
 
 
 def main():
@@ -192,8 +193,8 @@ def main():
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     create_dir(opt.log_dir)
 
-    # Load G
-    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint))
+    # Load C
+    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint_clean, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint_clean))
     if not os.path.exists(load_path):
         print("Error: {} not found".format(load_path))
         exit()
@@ -201,6 +202,14 @@ def main():
         state_dict = torch.load(load_path)
         netC.load_state_dict(state_dict["netC"])
         netC.eval()
+
+    # Load G
+    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint))
+    if not os.path.exists(load_path):
+        print("Error: {} not found".format(load_path))
+        exit()
+    else:
+        state_dict = torch.load(load_path)
         netG.load_state_dict(state_dict["netG"])
         netG.eval()
 

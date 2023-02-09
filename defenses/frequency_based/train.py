@@ -56,7 +56,7 @@ def addnoise(img):
     return auged
 
 
-def randshadow(img, input_size=64):
+def randshadow(img, input_size=32):
     aug = albumentations.RandomShadow(p=1)
     test = (img * 255).astype(np.uint8)
     augmented = aug(image=cv2.resize(test, (input_size, input_size)))
@@ -106,7 +106,7 @@ def gauss_smooth(image, sig=6):
     return output
 
 
-def patching_train(sample, train_data, n_input=3, input_size=64):
+def patching_train(sample, train_data, n_input=3, input_size=32):
     """
     this code conducts a patching procedure with random white blocks or random noise block
     """
@@ -216,8 +216,7 @@ def train(netC, optimizerC, train_dl, tf_writer, epoch, opt):
         total_sample += x_final_train.shape[0]
         avg_acc = total_correct * 100.0 / total_sample
         avg_loss_ce = total_loss_ce / total_sample
-        if batch_idx % 100 == 0:
-            print(batch_idx, len(train_dl), "CE Loss: {:.4f} | Acc: {:.4f}".format(avg_loss_ce, avg_acc))
+        progress_bar(batch_idx, len(train_dl), "CE Loss: {:.4f} | Acc: {:.4f}".format(avg_loss_ce, avg_acc))
 
     # for tensorboard
     if not epoch % 1:
@@ -253,7 +252,7 @@ def eval(netC, optimizerC, test_dl, best_acc, tf_writer, epoch, opt):
             acc = total_correct * 100.0 / total_sample
 
             info_string = "Acc: {:.4f} - Best: {:.4f}".format(acc, best_acc)
-    print(batch_idx, len(test_dl), info_string)
+            progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
     if not epoch % 1:
@@ -312,7 +311,6 @@ def main():
     # Dataset
     # NOTE: We are using get_dataloader() from `CleanLabelBackdoorGenerator/defenses/frequency_based/dataloader.py`
     # so image tensors are in the range [0, 1]
-    print('Loading data...')
     train_dl = get_dataloader(opt, True)
     test_dl = get_dataloader(opt, False)
 
@@ -334,9 +332,8 @@ def main():
 
             best_acc = state_dict["best_acc"]
             epoch_current = state_dict["epoch_current"]
-
+            
             tf_writer = SummaryWriter(log_dir=opt.log_dir)
-            print("Loaded pretrained model")
 
         else:
             print("Pretrained model doesnt exist")

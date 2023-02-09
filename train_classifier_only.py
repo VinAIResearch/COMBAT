@@ -103,7 +103,7 @@ def get_model(opt):
         netC = NetC_MNIST3().to(opt.device)
     if(opt.dataset == 'celeba'):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
-    if(opt.dataset in ['imagenet10', 'imagenet10small']):
+    if(opt.dataset in ['imagenet10', 'imagenet10small', 'tinyimagenet']):
         netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
 
     if opt.model != "default":
@@ -233,6 +233,11 @@ def main():
         opt.input_width = 112
         opt.input_channel = 3
         opt.num_classes = 10
+    elif(opt.dataset == 'tinyimagenet'):
+        opt.input_height = 64
+        opt.input_width = 64
+        opt.input_channel = 3
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 

@@ -12,7 +12,7 @@ import glob
 import config
 
 
-def get_transform(opt, train=True, pretensor_transform=False):
+def get_transform(opt, train=True):
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
     # if(train):
@@ -162,22 +162,14 @@ class TinyImageNet(data.Dataset):
             # file_name = file_path.split('/')[-1]
         return img, self.labels[os.path.basename(file_path)]
 
-def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None, shuffle=True):
-    if bs is None:
-        bs = opt.bs
-    transform = get_transform(opt, train, pretensor_transform)
+def get_dataloader(opt, train=True, shuffle=True):
+    transform = get_transform(opt, train)
     if opt.dataset == "gtsrb":
-        dataset = GTSRB(opt, train, transform, target_label=target_label)
+        dataset = GTSRB(opt, train, transform)
     elif opt.dataset == "mnist":
         dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
-        if target_label is not None:
-            pairs = [(x, y) for x, y in zip(dataset.data, dataset.targets) if int(y) == target_label]
-            dataset.data, dataset.targets = [x[0] for x in pairs], [x[1] for x in pairs]
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
-        if target_label is not None:
-            pairs = [(x, y) for x, y in zip(dataset.data, dataset.targets) if int(y) == target_label]
-            dataset.data, dataset.targets = [x[0] for x in pairs], [x[1] for x in pairs]
     elif opt.dataset == "celeba":
         if train:
             split = "train"
@@ -194,7 +186,7 @@ def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None
         raise Exception("Invalid dataset")
     if opt.debug:
         dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 
 def main():

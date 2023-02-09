@@ -123,7 +123,6 @@ class PreActResNetDropout(PreActResNet):
 
 input_size2scaler = {32: 1, 64: 4, 224: 49}
 
-
 def PreActResNet18(num_classes=10, n_input=3, input_size=32):
     scaler = input_size2scaler[input_size]
     return PreActResNet(PreActBlock, [2, 2, 2, 2], num_classes=num_classes, n_input=n_input, scaler=scaler)

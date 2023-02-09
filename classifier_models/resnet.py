@@ -94,7 +94,6 @@ class ResNet(nn.Module):
 
 input_size2scaler = {32: 1, 64: 4, 112: 9, 224: 49}
 
-
 def ResNet18(num_classes=10, n_input=3, input_size=64):
     scaler = input_size2scaler[input_size]
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes, n_input, scaler)

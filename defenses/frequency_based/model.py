@@ -4,7 +4,6 @@ from torch.nn import functional as F
 
 input_size2scaler = {32: 1, 64: 4, 112: 12.25, 224: 49}
 
-
 class FrequencyModel(nn.Module):
     def __init__(self, num_classes=2, n_input=3, input_size=32):
         super(FrequencyModel, self).__init__()

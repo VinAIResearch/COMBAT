@@ -199,7 +199,7 @@ def get_model(opt):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if(opt.dataset in ['imagenet10', 'imagenet10small']):
+    if(opt.dataset in ['imagenet10', 'imagenet10small', 'tinyimagenet']):
         netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
@@ -607,6 +607,11 @@ def main():
         opt.input_channel = 3
         opt.num_classes = 10
         opt.bs = 32
+    elif(opt.dataset == 'tinyimagenet'):
+        opt.input_height = 64
+        opt.input_width = 64
+        opt.input_channel = 3
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 
@@ -726,7 +731,6 @@ def main():
             epoch,
             opt,
         )
-
 
 if __name__ == "__main__":
     main()

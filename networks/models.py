@@ -50,7 +50,7 @@ class Normalizer:
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             normalizer = Normalize(opt, [0.5], [0.5])
-        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # None
         else:
             raise Exception("Invalid dataset")
@@ -71,7 +71,7 @@ class Denormalizer:
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             denormalizer = Denormalize(opt, [0.5], [0.5])
-        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # None
         else:
             raise Exception("Invalid dataset")
@@ -131,7 +131,7 @@ class AE(Module):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         elif opt.dataset == "mnist":
             denormalizer = Denormalize(opt, [0.5], [0.5])
-        elif(opt.dataset == 'gtsrb' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")
@@ -142,7 +142,7 @@ class AE(Module):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         elif opt.dataset == "mnist":
             normalizer = Normalize(opt, [0.5], [0.5])
-        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
+        elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")
@@ -336,6 +336,92 @@ class UnetGenerator(Module):
         u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
         u0 = self.tanh(self.upconv0_0(self.act(u0)))
         return u0
+
+
+class UnetGeneratorDCT(Module):
+    def __init__(self, opt, in_channels=3, nf=64, use_bias=True, out_channel=None, in_size=32, out_size=8):
+        super(UnetGeneratorDCT, self).__init__()
+        self.out_size = out_size
+        if out_channel is None:
+            out_channel = in_channels
+            self.out_channel = out_channel
+        self.act = nn.LeakyReLU(0.2, True)
+        self.up = nn.Upsample(scale_factor=(2, 2), mode="bilinear")
+        self.conv0_0 = nn.Conv2d(in_channels, nf, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        # self.bn0_0 = nn.InstanceNorm2d(nf)
+        self.conv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn0_1 = nn.InstanceNorm2d(nf)
+        self.conv1_0 = nn.Conv2d(nf, nf * 2, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn1_0 = nn.InstanceNorm2d(nf * 2)
+        self.conv1_1 = nn.Conv2d(nf * 2, nf * 2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn1_1 = nn.InstanceNorm2d(nf * 2)
+        self.conv2_0 = nn.Conv2d(nf * 2, nf * 4, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn2_0 = nn.InstanceNorm2d(nf * 4)
+        self.conv2_1 = nn.Conv2d(nf * 4, nf * 4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn2_1 = nn.InstanceNorm2d(nf * 4)
+        self.conv3_0 = nn.Conv2d(nf * 4, nf * 8, kernel_size=3, stride=2, padding=1, bias=use_bias)
+        self.bn3_0 = nn.InstanceNorm2d(nf * 8)
+        self.conv3_1 = nn.Conv2d(nf * 8, nf * 8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.bn3_1 = nn.InstanceNorm2d(nf * 8)
+
+        # self.upconv3_2 = nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn3_2 = nn.InstanceNorm2d(nf*8)
+        self.upconv3_1 = nn.Conv2d(nf * 8, nf * 8, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_1 = nn.InstanceNorm2d(nf * 8)
+        self.upconv3_0 = nn.Conv2d(nf * 8, nf * 4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn3_0 = nn.InstanceNorm2d(nf * 4)
+        # self.upconv2_2 = nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn2_2 = nn.InstanceNorm2d(nf*4)
+        self.upconv2_1 = nn.Conv2d(nf * 4, nf * 4, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_1 = nn.InstanceNorm2d(nf * 4)
+        self.upconv2_0 = nn.Conv2d(nf * 4, nf * 2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn2_0 = nn.InstanceNorm2d(nf * 2)
+        # self.upconv1_2 = nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn1_2 = nn.InstanceNorm2d(nf*2)
+        self.upconv1_1 = nn.Conv2d(nf * 2, nf * 2, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_1 = nn.InstanceNorm2d(nf * 2)
+        self.upconv1_0 = nn.Conv2d(nf * 2, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn1_0 = nn.InstanceNorm2d(nf)
+        # self.upconv0_2 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        # self.upbn0_2 = nn.InstanceNorm2d(nf)
+        self.upconv0_1 = nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn0_1 = nn.InstanceNorm2d(nf)
+        self.upconv0_0 = nn.Conv2d(nf, out_channel, kernel_size=3, stride=1, padding=1, bias=use_bias)
+        self.upbn0_0 = nn.InstanceNorm2d(out_channel)
+        self.do = nn.Dropout(p=0.3)
+        self.tanh = nn.Tanh()
+        self.linear = nn.Linear(out_channel * (in_size ** 2), out_channel * (out_size ** 2))
+
+    def forward(self, x):
+        f0 = self.conv0_0(x)
+        f0 = self.bn0_1(self.conv0_1(self.act(f0)))
+        f1 = self.bn1_0(self.conv1_0(self.act(f0)))
+        f1 = self.bn1_1(self.conv1_1(self.act(f1)))
+        f2 = self.bn2_0(self.conv2_0(self.act(f1)))
+        f2 = self.bn2_1(self.conv2_1(self.act(f2)))
+        f3 = self.bn3_0(self.conv3_0(self.act(f2)))
+        f3 = self.bn3_1(self.conv3_1(self.act(f3)))
+        # f3 = self.do(f3)
+
+        # u3 = self.upbn3_2(self.upconv3_2(self.act(self.up(f3))))
+        u3 = self.upbn3_1(self.upconv3_1(self.act(self.up(f3))))
+        u3 = self.upbn3_0(self.upconv3_0(self.act(u3))) + f2
+        # u2 = self.upbn2_2(self.upconv2_2(self.act(self.up(u3))))
+        u2 = self.upbn2_1(self.upconv2_1(self.act(self.up(u3))))
+        u2 = self.upbn2_0(self.upconv2_0(self.act(u2))) + f1
+        # u1 = self.upbn1_2(self.upconv1_2(self.act(self.up(u2))))
+        u1 = self.upbn1_1(self.upconv1_1(self.act(self.up(u2))))
+        u1 = self.upbn1_0(self.upconv1_0(self.act(u1))) + f0
+        # u0 = self.upbn0_2(self.upconv0_2(self.act(self.up(u1))))
+        u0 = self.upbn0_1(self.upconv0_1(self.act(self.up(u1))))
+        u0 = self.upbn0_0(self.upconv0_0(self.act(u0)))
+
+        out = torch.flatten(u0, 1)
+        out = self.linear(out)
+        out = self.tanh(out)
+        out = out.view(-1, self.out_channel, self.out_size, self.out_size)
+
+        return out
 
 
 class GridGenerator(Module):

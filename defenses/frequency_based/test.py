@@ -72,7 +72,10 @@ def test(netC, netG, test_dl, opt):
             bs = x.shape[0]
             x, y = x.to(opt.device), y.to(opt.device)
             noise = netG(x)
-            poi_x = torch.clamp(x + opt.noise_rate * noise, -1, 1)
+            if opt.dataset == "gtsrb":
+                poi_x = torch.clamp(x + opt.scale_noise_rate * opt.noise_rate * noise, -1, 1)
+            else:
+                poi_x = torch.clamp(x + opt.noise_rate * noise, -1, 1)
             x_test = x.detach().cpu().numpy()
             poi_x_test = poi_x.detach().cpu().numpy()
             x_dct_test = np.vstack((x_test, poi_x_test))
@@ -118,9 +121,14 @@ def main():
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_classes = 8
-    elif(opt.dataset == 'imagenet'):
+    elif(opt.dataset == 'imagenet10'):
         opt.input_height = 224
         opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
+    elif(opt.dataset == 'imagenet10small'):
+        opt.input_height = 112
+        opt.input_width = 112
         opt.input_channel = 3
         opt.num_classes = 10
     else:

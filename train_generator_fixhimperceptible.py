@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms.functional as fn
+from kornia.losses import total_variation
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
@@ -20,11 +21,7 @@ from classifier_models import (
     PreActResNet18,
     ResNet18,
 )
-from defenses.frequency_based.model import (
-    FrequencyModel,
-    FrequencyModelDropout,
-    FrequencyModelDropoutEnsemble,
-)
+from defenses.frequency_based.model import FrequencyModel
 from networks.models import (
     AE,
     Denormalizer,
@@ -39,9 +36,6 @@ from utils.utils import progress_bar
 
 F_MAPPING_NAMES = {
     "original": FrequencyModel,
-    "original_holdout": FrequencyModel,
-    "original_dropout": FrequencyModelDropout,
-    "original_dropout_ensemble": FrequencyModelDropoutEnsemble,
     "vgg13": partial(VGG, "VGG13"),
     "densenet121": DenseNet121,
     "mobilenetv2": MobileNetV2,
@@ -146,22 +140,26 @@ def get_model(opt):
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
-    # Frequency Detector
-    F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
-    F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
-
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
-    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    netF_eval = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
-    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)  # Adam(netG.parameters(), opt.lr_C,betas=(0.9,0.999))
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
-    optimizer_clean = torch.optim.SGD(clean_model.parameters(), opt.lr_clean, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(optimizer_clean, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda)
 
-    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean
+    return (
+        netC,
+        optimizerC,
+        schedulerC,
+        netG,
+        optimizerG,
+        schedulerG,
+        netF,
+        netF_eval,
+        clean_model,
+    )
 
 
 def train(
@@ -173,8 +171,6 @@ def train(
     schedulerG,
     netF,
     clean_model,
-    optimizer_clean,
-    scheduler_clean,
     train_dl,
     tf_writer,
     epoch,
@@ -183,12 +179,12 @@ def train(
     torch.autograd.set_detect_anomaly(True)
     print(" Train:")
     netC.train()
-
     rate_bd = opt.pc
     total_loss_ce = 0
     total_loss_grad_l2 = 0
     total_loss_l2 = 0
     total_loss_F = 0
+    total_loss_tv = 0
     total_clean_model_loss = 0
     total_sample = 0
 
@@ -247,17 +243,17 @@ def train(
         loss.backward()
         optimizerC.step()
 
-        ### Train Clean Model
-        netC.eval()
-        netG.eval()
-        clean_model.train()
-        optimizer_clean.zero_grad()
+        # ### Train Clean Model
+        # netC.eval()
+        # netG.eval()
+        # clean_model.train()
+        # optimizer_clean.zero_grad()
 
         clean_preds = clean_model(transforms(inputs))
-        loss_ce = criterion_CE(clean_preds, targets)
-        loss = loss_ce
-        loss.backward()
-        optimizer_clean.step()
+        # loss_ce = criterion_CE(clean_preds, targets)
+        # loss = loss_ce
+        # loss.backward()
+        # optimizer_clean.step()
 
         ### Train G
         netC.eval()
@@ -270,8 +266,8 @@ def train(
         pred_clean = netC(transforms(inputs))
         pred_bd = netC(transforms(inputs_bd))
 
-        # Classification loss
-        loss_ce = criterion_CE(pred_bd, bd_targets)
+        # loss_ce = criterion_CE(pred_clean, targets) + 50 * criterion_CE(pred_bd, bd_targets)  # Classification loss
+        loss_ce = criterion_CE(pred_bd, bd_targets)  # Classification loss
         if torch.isnan(total_preds).any() or torch.isnan(total_targets).any():
             print(total_preds, total_targets)
         loss_l2 = criterion_L2(inputs_bd, inputs)  # L2 loss
@@ -288,11 +284,17 @@ def train(
         pred_F = netF(inputs_F)
         loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
+        # Loss TV
+        if opt.noise_only:
+            loss_tv = total_variation(noise_bd).mean()
+        else:
+            loss_tv = total_variation(inputs_bd).mean()
+
         # Clean Model Loss
         clean_model_preds = clean_model(transforms(inputs_bd))
         clean_model_loss = criterion_CE(clean_model_preds, targets)
 
-        loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.clean_model_weight * clean_model_loss  # + loss_grad_l2
+        loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.tv_weight * loss_tv + opt.clean_model_weight * clean_model_loss  # + loss_grad_l2
         loss.backward()
         optimizerG.step()
 
@@ -301,6 +303,7 @@ def train(
         total_loss_l2 += loss_l2.detach()
         total_loss_grad_l2 += loss_grad_l2.detach()
         total_loss_F += loss_F.detach()
+        total_loss_tv += loss_tv.detach()
         total_clean_model_loss += clean_model_loss.detach()
         total_clean_correct += torch.sum(torch.argmax(pred_clean, dim=1) == targets)
         total_bd_correct += torch.sum(torch.argmax(pred_bd, dim=1) == bd_targets)
@@ -319,11 +322,13 @@ def train(
         avg_loss_l2 = total_loss_l2 / total_sample
         avg_loss_grad_l2 = total_loss_grad_l2 / total_sample
         avg_loss_F = total_loss_F / total_sample
+        avg_loss_tv = total_loss_tv / total_sample
         avg_clean_model_loss = total_clean_model_loss / total_sample
+        # progress_bar(batch_idx, len(train_dl), "CE Loss: {:.4f} | L2 Loss: {:.6f}  | GL2 Loss: {:.6f} | F Loss: {:.6f} | TV Loss: {:.6f} | Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f}".format(avg_loss_ce, avg_loss_l2, avg_loss_grad_l2, avg_loss_F, avg_loss_tv, avg_acc_clean, avg_acc_bd, avg_acc_F))
         progress_bar(
             batch_idx,
             len(train_dl),
-            "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f} | Clean Model Acc: {:.4f} | Clean Model ASR: {:.4f}".format(
+            "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f} | Clean Model Acc: {:.4f} | Clean Model Bd BA: {:.4f} | Clean Model Bd ASR: {:.4f}".format(
                 avg_acc_clean,
                 avg_acc_bd,
                 avg_acc_F,
@@ -359,6 +364,7 @@ def train(
                 "L2 Loss": avg_loss_l2,
                 "Grad L2 Loss": avg_loss_grad_l2,
                 "F Loss": avg_loss_F,
+                "TV Loss": avg_loss_tv,
                 "CleanModel Loss": avg_clean_model_loss,
             },
             epoch,
@@ -366,7 +372,6 @@ def train(
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
-    scheduler_clean.step()
     schedulerG.step()
 
 
@@ -379,8 +384,6 @@ def eval(
     schedulerG,
     netF,
     clean_model,
-    optimizer_clean,
-    scheduler_clean,
     test_dl,
     best_clean_acc,
     best_bd_acc,
@@ -404,6 +407,7 @@ def eval(
     total_clean_model_bd_ba = 0
     total_clean_model_bd_asr = 0
 
+    criterion_BCE = torch.nn.BCELoss()
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
             inputs, targets = inputs.to(opt.device), targets.to(opt.device)
@@ -498,8 +502,6 @@ def eval(
             "schedulerG": schedulerG.state_dict(),
             "optimizerG": optimizerG.state_dict(),
             "clean_model": clean_model.state_dict(),
-            "scheduler_clean": scheduler_clean.state_dict(),
-            "optimizer_clean": optimizer_clean.state_dict(),
             "best_clean_acc": acc_clean,
             "best_bd_acc": acc_bd,
             "best_F_acc": acc_F,
@@ -548,7 +550,17 @@ def main():
     test_dl = get_dataloader(opt, False)
 
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean = get_model(opt)
+    (
+        netC,
+        optimizerC,
+        schedulerC,
+        netG,
+        optimizerG,
+        schedulerG,
+        netF,
+        netF_eval,
+        clean_model,
+    ) = get_model(opt)
 
     # Load pretrained model
     mode = opt.saving_prefix
@@ -575,6 +587,21 @@ def main():
     netF_eval.eval()
     print("Done")
 
+    # Load clean_model
+    load_path = os.path.join(
+        opt.checkpoints,
+        opt.load_checkpoint_clean,
+        opt.dataset,
+        "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint_clean),
+    )
+    if not os.path.exists(load_path):
+        print("Error: {} not found".format(load_path))
+        exit()
+    else:
+        state_dict = torch.load(load_path)
+        clean_model.load_state_dict(state_dict["netC"])
+        clean_model.eval()
+
     if opt.continue_training:
         if os.path.exists(opt.ckpt_path):
             print("Continue training!!")
@@ -585,9 +612,6 @@ def main():
             netG.load_state_dict(state_dict["netG"])
             optimizerG.load_state_dict(state_dict["optimizerG"])
             schedulerG.load_state_dict(state_dict["schedulerG"])
-            clean_model.load_state_dict(state_dict["clean_model"])
-            optimizer_clean.load_state_dict(state_dict["optimizer_clean"])
-            scheduler_clean.load_state_dict(state_dict["scheduler_clean"])
 
             best_clean_acc = state_dict["best_clean_acc"]
             best_bd_acc = state_dict["best_bd_acc"]
@@ -626,14 +650,12 @@ def main():
             schedulerG,
             netF,
             clean_model,
-            optimizer_clean,
-            scheduler_clean,
             train_dl,
             tf_writer,
             epoch,
             opt,
         )
-        (best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_bd_ba, best_clean_model_ba_asr) = eval(
+        (best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_bd_ba, best_clean_model_bd_asr) = eval(
             netC,
             optimizerC,
             schedulerC,
@@ -642,8 +664,6 @@ def main():
             schedulerG,
             netF_eval,
             clean_model,
-            optimizer_clean,
-            scheduler_clean,
             test_dl,
             best_clean_acc,
             best_bd_acc,

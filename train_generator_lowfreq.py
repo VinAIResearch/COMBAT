@@ -10,6 +10,9 @@ import torchvision.transforms.functional as fn
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
+import timm
+from vit_pytorch import SimpleViT
+from torchvision.models import efficientnet_b0
 
 import config
 from classifier_models import (
@@ -18,6 +21,7 @@ from classifier_models import (
     MobileNetV2,
     PreActResNet10,
     PreActResNet18,
+    PreActResNetDropout18,
     ResNet18,
 )
 from defenses.frequency_based.model import (
@@ -32,10 +36,61 @@ from networks.models import (
     NetC_MNIST2,
     NetC_MNIST3,
     Normalizer,
-    UnetGenerator,
+    UnetGeneratorDCT,
 )
 from utils.dataloader import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import dct_2d, idct_2d
+
+
+class ViT(SimpleViT):
+    # Adapter for SimpleViT
+    def __init__(self, input_size=32, n_input=3, *args, **kwargs):
+        super().__init__(image_size=input_size, channels=n_input, *args, **kwargs)
+
+
+def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Tiny (Vit-Ti)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_tiny_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Small (ViT-S)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_small_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
+    """ViT-Base (ViT-B)"""
+    patch_size = input_size // 16
+    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model = timm.models.vision_transformer._create_vision_transformer("vit_base_patch16_224", pretrained=False, **model_kwargs)
+    return model
+
+
+C_MAPPING_NAMES = {
+    "preactresnet10": PreActResNet10,
+    "preactresnetdropout18": PreActResNetDropout18,
+    "vgg13": partial(VGG, "VGG13"),
+    "mobilenetv2": MobileNetV2,
+    "efficientnetb0": efficientnet_b0,
+    "vit": partial(ViT, patch_size=4, dim=768, depth=6, heads=8, mlp_dim=1024),
+    "simplevitsmall8": partial(ViT, patch_size=8, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitsmall4": partial(ViT, patch_size=4, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitsmall2": partial(ViT, patch_size=2, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
+    "simplevitbase8": partial(ViT, patch_size=8, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "simplevitbase4": partial(ViT, patch_size=4, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "simplevitbase2": partial(ViT, patch_size=2, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
+    "vittiny": vit_tiny,
+    "vitsmall": vit_small,
+    "vitbase": vit_base,
+}
+
 
 F_MAPPING_NAMES = {
     "original": FrequencyModel,
@@ -47,53 +102,6 @@ F_MAPPING_NAMES = {
     "mobilenetv2": MobileNetV2,
     "resnet18": ResNet18,
 }
-
-
-def dct(x, norm="ortho"):
-    """
-    Discrete Cosine Transform, Type II (a.k.a. the DCT)
-    For the meaning of the parameter `norm`, see:
-    https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.fftpack.dct.html
-    :param x: the input signal
-    :param norm: the normalization, None or 'ortho'
-    :return: the DCT-II of the signal over the last dimension
-    """
-    x_shape = x.shape
-    N = x_shape[-1]
-    x = x.contiguous().view(-1, N)
-
-    v = torch.cat([x[:, ::2], x[:, 1::2].flip([1])], dim=1)
-
-    # Vc = torch.rfft(v, 1, onesided=False)
-    Vc = torch.view_as_real(torch.fft.fft(v, dim=1))
-
-    k = -torch.arange(N, dtype=x.dtype, device=x.device)[None, :] * np.pi / (2 * N)
-    W_r = torch.cos(k)
-    W_i = torch.sin(k)
-
-    V = Vc[:, :, 0] * W_r - Vc[:, :, 1] * W_i
-
-    if norm == "ortho":
-        V[:, 0] /= np.sqrt(N) * 2
-        V[:, 1:] /= np.sqrt(N / 2) * 2
-
-    V = 2 * V.view(*x_shape)
-
-    return V
-
-
-def dct_2d(x, norm="ortho"):
-    """
-    2-dimentional Discrete Cosine Transform, Type II (a.k.a. the DCT)
-    For the meaning of the parameter `norm`, see:
-    https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.fftpack.dct.html
-    :param x: the input signal
-    :param norm: the normalization, None or 'ortho'
-    :return: the DCT-II of the signal over the last 2 dimensions
-    """
-    X1 = dct(x, norm=norm)
-    X2 = dct(X1.transpose(-1, -2), norm=norm)
-    return X2.transpose(-1, -2)
 
 
 def create_dir(path_dir):
@@ -118,6 +126,26 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
+def create_inputs_bd(inputs, netG, opt, return_noise=False):
+    g_out_size = int(opt.input_height * opt.r)
+
+    noise_dct = netG(inputs)  # noise_dct in range [-1, 1]
+    noise_bd_dct = torch.zeros_like(inputs)
+    noise_bd_dct[:, :, :g_out_size, :g_out_size] = noise_dct
+
+    noise_bd = idct_2d(noise_bd_dct)
+    noise_bd = ((noise_bd  - noise_bd.min()) / (noise_bd.max() - noise_bd.min())) * 2 - 1  # Normalize to [-1, 1]
+    if opt.dataset == "gtsrb":
+        inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
+    else:
+        inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+
+    if return_noise:
+        return inputs_bd, noise_bd
+    else:
+        return inputs_bd
+
+
 def get_model(opt):
     netC = None
     optimizerC = None
@@ -126,42 +154,42 @@ def get_model(opt):
     optimizerG = None
     schedulerG = None
     netF = None
-    netF_eval = None
-    clean_model = None
+
+    g_in_size = opt.input_height
+    g_out_size = int(opt.input_height * opt.r)
 
     if opt.dataset == "cifar10":
         netC = PreActResNet18().to(opt.device)
-        clean_model = PreActResNet18().to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
     if opt.dataset == "gtsrb":
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        clean_model = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
     if opt.dataset == "mnist":
         netC = NetC_MNIST3().to(opt.device)
-        clean_model = NetC_MNIST3().to(opt.device)
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
+        netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
-        clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
+        netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
+    if(opt.dataset == 'imagenet10'):
+        netC = ResNet18(num_classes=opt.num_classes, input_size=in_size).to(opt.device)
+        netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
+
+    if opt.model != "default":
+        netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Frequency Detector
     F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
     F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
 
     netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
-    netF_eval = F_MAPPING_NAMES[opt.F_model_eval](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
 
     # Optimizer
     optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
     optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
-    optimizer_clean = torch.optim.SGD(clean_model.parameters(), opt.lr_clean, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    scheduler_clean = torch.optim.lr_scheduler.MultiStepLR(optimizer_clean, opt.scheduler_clean_milestones, opt.scheduler_clean_lambda)
 
-    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean
+    return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF
 
 
 def train(
@@ -172,9 +200,6 @@ def train(
     optimizerG,
     schedulerG,
     netF,
-    clean_model,
-    optimizer_clean,
-    scheduler_clean,
     train_dl,
     tf_writer,
     epoch,
@@ -186,10 +211,7 @@ def train(
 
     rate_bd = opt.pc
     total_loss_ce = 0
-    total_loss_grad_l2 = 0
     total_loss_l2 = 0
-    total_loss_F = 0
-    total_clean_model_loss = 0
     total_sample = 0
 
     total_clean = 0
@@ -197,9 +219,6 @@ def train(
     total_clean_correct = 0
     total_bd_correct = 0
     total_F_correct = 0
-    total_clean_model_correct = 0
-    total_clean_model_bd_ba = 0
-    total_clean_model_bd_asr = 0
     criterion_CE = torch.nn.CrossEntropyLoss()
     criterion_BCE = torch.nn.BCELoss()
     criterion_L2 = torch.nn.MSELoss()
@@ -214,20 +233,18 @@ def train(
 
         ### Train C
         netG.eval()
-        clean_model.eval()
         netC.train()
         optimizerC.zero_grad()
+
         # Create backdoor data
         trg_ind = (targets == bd_targets).nonzero()[:, 0]  # Target-label image indices
         ntrg_ind = (targets != bd_targets).nonzero()[:, 0]  # Nontarget-label image indices
         num_bd = np.sum(np.random.rand(trg_ind.shape[0]) < rate_bd)
-        # num_bd = int(trg_ind.shape[0] * rate_bd)
-        # print(epoch, trg_ind.shape[0], num_bd)
-        # if num_bd < 1:
-        #   continue
         inputs_toChange = inputs[trg_ind[:num_bd]]
-        noise_bd = netG(inputs_toChange)
-        inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        if num_bd > 0:
+            inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
+        else:
+            inputs_bd = inputs[[]]
         total_inputs = torch.cat([inputs_bd, inputs[trg_ind[num_bd:]], inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat(
@@ -247,103 +264,49 @@ def train(
         loss.backward()
         optimizerC.step()
 
-        ### Train Clean Model
-        netC.eval()
-        netG.eval()
-        clean_model.train()
-        optimizer_clean.zero_grad()
-
-        clean_preds = clean_model(transforms(inputs))
-        loss_ce = criterion_CE(clean_preds, targets)
-        loss = loss_ce
-        loss.backward()
-        optimizer_clean.step()
-
         ### Train G
         netC.eval()
-        clean_model.eval()
         netG.train()
         optimizerG.zero_grad()
+
         # Create backdoor data
-        noise_bd = netG(inputs)
-        inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+        inputs_bd, noise_bd = create_inputs_bd(inputs, netG, opt, return_noise=True)
         pred_clean = netC(transforms(inputs))
         pred_bd = netC(transforms(inputs_bd))
 
         # Classification loss
         loss_ce = criterion_CE(pred_bd, bd_targets)
-        if torch.isnan(total_preds).any() or torch.isnan(total_targets).any():
-            print(total_preds, total_targets)
-        loss_l2 = criterion_L2(inputs_bd, inputs)  # L2 loss
-        inputs_ext = F.pad(inputs, (1, 1, 2, 1))
-        inputs_bd_ext = F.pad(inputs_bd, (1, 1, 2, 1))
-        loss_grad_l2 = criterion_L2(inputs_ext[:, :, 1:] - inputs_ext[:, :, :-1], inputs_bd_ext[:, :, 1:] - inputs_bd_ext[:, :, :-1],) + criterion_L2(
-            inputs_ext[:, :, :, 1:] - inputs_ext[:, :, :, :-1],
-            inputs_bd_ext[:, :, :, 1:] - inputs_bd_ext[:, :, :, :-1],
-        )  # Gradient loss
+        loss_l2 = criterion_L2(inputs_bd, inputs)
 
         # Loss F
-        inputs_F = dct_2d((inputs_bd + 1) / 2 * 255)
-        F_targets = torch.ones_like(targets)
+        inputs_F = dct_2d(((inputs_bd + 1) / 2 * 255).byte())
         pred_F = netF(inputs_F)
-        loss_F = criterion_CE(pred_F, torch.zeros_like(targets))
 
-        # Clean Model Loss
-        clean_model_preds = clean_model(transforms(inputs_bd))
-        clean_model_loss = criterion_CE(clean_model_preds, targets)
-
-        loss = loss_ce + opt.L2_weight * loss_l2 + opt.F_weight * loss_F + opt.clean_model_weight * clean_model_loss  # + loss_grad_l2
+        loss = loss_ce + opt.L2_weight * loss_l2
         loss.backward()
         optimizerG.step()
 
         total_sample += bs
         total_loss_ce += loss_ce.detach()
         total_loss_l2 += loss_l2.detach()
-        total_loss_grad_l2 += loss_grad_l2.detach()
-        total_loss_F += loss_F.detach()
-        total_clean_model_loss += clean_model_loss.detach()
         total_clean_correct += torch.sum(torch.argmax(pred_clean, dim=1) == targets)
         total_bd_correct += torch.sum(torch.argmax(pred_bd, dim=1) == bd_targets)
-        total_F_correct += torch.sum(torch.argmax(pred_F, dim=1) == F_targets)
-        total_clean_model_correct += torch.sum(torch.argmax(clean_preds, dim=1) == targets)
-        total_clean_model_bd_ba += torch.sum(torch.argmax(clean_model_preds, dim=1) == targets)
-        total_clean_model_bd_asr += torch.sum(torch.argmax(clean_model_preds, dim=1) == bd_targets)
+        total_F_correct += torch.sum(torch.argmax(pred_F, dim=1) == torch.ones_like(targets))
 
         avg_acc_clean = total_clean_correct * 100.0 / total_sample
         avg_acc_bd = total_bd_correct * 100.0 / total_sample
         avg_acc_F = total_F_correct * 100.0 / total_sample
-        avg_clean_model_acc = total_clean_model_correct * 100.0 / total_sample
-        avg_clean_model_bd_ba = total_clean_model_bd_ba * 100.0 / total_sample
-        avg_clean_model_bd_asr = total_clean_model_bd_asr * 100.0 / total_sample
         avg_loss_ce = total_loss_ce / total_sample
         avg_loss_l2 = total_loss_l2 / total_sample
-        avg_loss_grad_l2 = total_loss_grad_l2 / total_sample
-        avg_loss_F = total_loss_F / total_sample
-        avg_clean_model_loss = total_clean_model_loss / total_sample
         progress_bar(
             batch_idx,
             len(train_dl),
-            "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f} | Clean Model Acc: {:.4f} | Clean Model ASR: {:.4f}".format(
+            "Clean Acc: {:.4f} | Bd Acc: {:.4f} | F Acc: {:.4f}".format(
                 avg_acc_clean,
                 avg_acc_bd,
                 avg_acc_F,
-                avg_clean_model_acc,
-                avg_clean_model_bd_ba,
-                avg_clean_model_bd_asr,
             ),
         )
-
-        # Save image for debugging
-        if not batch_idx % 5:
-            if not os.path.exists(opt.temps):
-                create_dir(opt.temps)
-            path = os.path.join(opt.temps, "samples.png")
-            batch_img = torch.cat([inputs, inputs_bd], dim=2)
-            torchvision.utils.save_image(batch_img, path, normalize=True)
-
-            if denormalizer is not None:
-                batch_img = denormalizer(batch_img)
-            grid = torchvision.utils.make_grid(batch_img, normalize=True)
 
     # for tensorboard
     if not epoch % 1:
@@ -353,20 +316,19 @@ def train(
                 "Clean": avg_acc_clean,
                 "Bd": avg_acc_bd,
                 "F": avg_acc_F,
-                "CleanModel Acc": avg_clean_model_acc,
-                "CleanModel Bd BA": avg_clean_model_bd_ba,
-                "CleanModel Bd ASR": avg_clean_model_bd_asr,
                 "L2 Loss": avg_loss_l2,
-                "Grad L2 Loss": avg_loss_grad_l2,
-                "F Loss": avg_loss_F,
-                "CleanModel Loss": avg_clean_model_loss,
             },
             epoch,
         )
+
+    if not epoch % 1:
+        batch_img = torch.cat([inputs, inputs_bd, noise_bd], dim=2)
+        if denormalizer is not None:
+            batch_img = denormalizer(batch_img)
+        grid = torchvision.utils.make_grid(batch_img, normalize=True)
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
-    scheduler_clean.step()
     schedulerG.step()
 
 
@@ -378,16 +340,10 @@ def eval(
     optimizerG,
     schedulerG,
     netF,
-    clean_model,
-    optimizer_clean,
-    scheduler_clean,
     test_dl,
     best_clean_acc,
     best_bd_acc,
     best_F_acc,
-    best_clean_model_acc,
-    best_clean_model_bd_ba,
-    best_clean_model_bd_asr,
     tf_writer,
     epoch,
     opt,
@@ -400,9 +356,6 @@ def eval(
     total_clean_correct = 0
     total_bd_correct = 0
     total_F_correct = 0
-    total_clean_model_correct = 0
-    total_clean_model_bd_ba = 0
-    total_clean_model_bd_asr = 0
 
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
@@ -418,11 +371,7 @@ def eval(
             ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
             inputs_toChange = inputs[ntrg_ind]
             targets_toChange = targets[ntrg_ind]
-            noise_bd = netG(inputs_toChange)
-            if opt.dataset == "gtsrb":
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
-            else:
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
@@ -435,34 +384,17 @@ def eval(
             preds_F = netF(inputs_F)
             total_F_correct += torch.sum(torch.argmax(preds_F, 1) == targets_F)
 
-            # Evaluate against Clean Model
-            clean_model_preds_clean = clean_model(inputs)
-            total_clean_model_correct += torch.sum(torch.argmax(clean_model_preds_clean, 1) == targets)
-            clean_model_preds_bd = clean_model(inputs_bd)
-            total_clean_model_bd_ba += torch.sum(torch.argmax(clean_model_preds_bd, 1) == targets_toChange)
-            total_clean_model_bd_asr += torch.sum(torch.argmax(clean_model_preds_bd, 1) == targets_bd)
-
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
             acc_bd = total_bd_correct * 100.0 / total_bd_sample
             acc_F = total_F_correct * 100.0 / total_bd_sample
 
-            acc_clean_model = total_clean_model_correct * 100.0 / total_clean_sample
-            bd_ba_clean_model = total_clean_model_bd_ba * 100.0 / total_bd_sample
-            bd_asr_clean_model = total_clean_model_bd_asr * 100.0 / total_bd_sample
-
-            info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f} | F Acc: {:.4f} - Best: {:.4f} | Clean Model Acc: {:.4f} - Best: {:.4f} | Clean Model Bd BA: {:.4f} - Best: {:.4f} | Clean Model Bd ASR: {:.4f} - Best: {:.4f}".format(
+            info_string = "Clean Acc: {:.4f} - Best: {:.4f} | Bd Acc: {:.4f} - Best: {:.4f} | F Acc: {:.4f} - Best: {:.4f}".format(
                 acc_clean,
                 best_clean_acc,
                 acc_bd,
                 best_bd_acc,
                 acc_F,
                 best_F_acc,
-                acc_clean_model,
-                best_clean_model_acc,
-                bd_ba_clean_model,
-                best_clean_model_bd_ba,
-                bd_asr_clean_model,
-                best_clean_model_bd_asr,
             )
             progress_bar(batch_idx, len(test_dl), info_string)
 
@@ -474,9 +406,6 @@ def eval(
                 "Clean": acc_clean,
                 "Bd": acc_bd,
                 "F": acc_F,
-                "Clean Model Acc": acc_clean_model,
-                "Clean Model Bd BA": bd_ba_clean_model,
-                "Clean Model Bd ASR": bd_asr_clean_model,
             },
             epoch,
         )
@@ -487,9 +416,6 @@ def eval(
         best_clean_acc = acc_clean
         best_bd_acc = acc_bd
         best_F_acc = acc_F
-        best_clean_model_acc = acc_clean_model
-        best_clean_model_bd_ba = bd_ba_clean_model
-        best_clean_model_bd_asr = bd_asr_clean_model
         state_dict = {
             "netC": netC.state_dict(),
             "schedulerC": schedulerC.state_dict(),
@@ -497,15 +423,9 @@ def eval(
             "netG": netG.state_dict(),
             "schedulerG": schedulerG.state_dict(),
             "optimizerG": optimizerG.state_dict(),
-            "clean_model": clean_model.state_dict(),
-            "scheduler_clean": scheduler_clean.state_dict(),
-            "optimizer_clean": optimizer_clean.state_dict(),
             "best_clean_acc": acc_clean,
             "best_bd_acc": acc_bd,
             "best_F_acc": acc_F,
-            "best_clean_model_acc": best_clean_model_acc,
-            "best_clean_model_bd_ba": best_clean_model_bd_ba,
-            "best_clean_model_bd_asr": best_clean_model_bd_asr,
             "epoch_current": epoch,
         }
         torch.save(state_dict, opt.ckpt_path)
@@ -513,9 +433,6 @@ def eval(
         best_clean_acc,
         best_bd_acc,
         best_F_acc,
-        best_clean_model_acc,
-        best_clean_model_bd_ba,
-        best_clean_model_bd_asr,
     )
 
 
@@ -529,7 +446,8 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-        opt.num_classes = 13
+        if opt.num_classes != 43:
+            opt.num_classes = 13
     elif opt.dataset == "mnist":
         opt.input_height = 32
         opt.input_width = 32
@@ -540,6 +458,12 @@ def main():
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 
@@ -548,7 +472,7 @@ def main():
     test_dl = get_dataloader(opt, False)
 
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, netF_eval, clean_model, optimizer_clean, scheduler_clean = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF = get_model(opt)
 
     # Load pretrained model
     mode = opt.saving_prefix
@@ -566,15 +490,6 @@ def main():
     netF.eval()
     print("Done")
 
-    # Load pretrained FrequencyModel
-    opt.F_eval_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset)
-    opt.F_eval_ckpt_path = os.path.join(opt.F_eval_ckpt_folder, opt.F_model_eval, "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model_eval))
-    print(f"Loading {opt.F_model_eval} at {opt.F_eval_ckpt_path}")
-    state_dict_F_eval = torch.load(opt.F_eval_ckpt_path)
-    netF_eval.load_state_dict(state_dict_F_eval["netC"])
-    netF_eval.eval()
-    print("Done")
-
     if opt.continue_training:
         if os.path.exists(opt.ckpt_path):
             print("Continue training!!")
@@ -585,16 +500,10 @@ def main():
             netG.load_state_dict(state_dict["netG"])
             optimizerG.load_state_dict(state_dict["optimizerG"])
             schedulerG.load_state_dict(state_dict["schedulerG"])
-            clean_model.load_state_dict(state_dict["clean_model"])
-            optimizer_clean.load_state_dict(state_dict["optimizer_clean"])
-            scheduler_clean.load_state_dict(state_dict["scheduler_clean"])
 
             best_clean_acc = state_dict["best_clean_acc"]
             best_bd_acc = state_dict["best_bd_acc"]
             best_F_acc = state_dict["best_F_acc"]
-            best_clean_model_acc = state_dict["best_clean_model_acc"]
-            best_clean_model_bd_ba = state_dict["best_clean_model_bd_ba"]
-            best_clean_model_bd_asr = state_dict["best_clean_model_bd_asr"]
             epoch_current = state_dict["epoch_current"]
 
             tf_writer = SummaryWriter(log_dir=opt.log_dir)
@@ -606,9 +515,6 @@ def main():
         best_clean_acc = 0.0
         best_bd_acc = 0.0
         best_F_acc = 0.0
-        best_clean_model_acc = 0.0
-        best_clean_model_bd_ba = 0.0
-        best_clean_model_bd_asr = 0.0
         epoch_current = 0
         shutil.rmtree(opt.ckpt_folder, ignore_errors=True)
         create_dir(opt.log_dir)
@@ -625,32 +531,23 @@ def main():
             optimizerG,
             schedulerG,
             netF,
-            clean_model,
-            optimizer_clean,
-            scheduler_clean,
             train_dl,
             tf_writer,
             epoch,
             opt,
         )
-        (best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_bd_ba, best_clean_model_ba_asr) = eval(
+        (best_clean_acc, best_bd_acc, best_F_acc) = eval(
             netC,
             optimizerC,
             schedulerC,
             netG,
             optimizerG,
             schedulerG,
-            netF_eval,
-            clean_model,
-            optimizer_clean,
-            scheduler_clean,
+            netF,
             test_dl,
             best_clean_acc,
             best_bd_acc,
             best_F_acc,
-            best_clean_model_acc,
-            best_clean_model_bd_ba,
-            best_clean_model_bd_asr,
             tf_writer,
             epoch,
             opt,

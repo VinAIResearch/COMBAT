@@ -54,6 +54,7 @@ def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
 
 
 C_MAPPING_NAMES = {
+    "preactresnet10": PreActResNet10,
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
     "efficientnetb0": efficientnet_b0,
@@ -112,7 +113,7 @@ def get_model(opt):
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if(opt.dataset == 'imagenet10'):
+    if(opt.dataset in ['imagenet10', 'imagenet10small']):
         netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
@@ -261,7 +262,8 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-        opt.num_classes = 13
+        if opt.num_classes != 43:
+            opt.num_classes = 13
     elif opt.dataset == "mnist":
         opt.input_height = 32
         opt.input_width = 32
@@ -275,6 +277,13 @@ def main():
     elif(opt.dataset == 'imagenet10'):
         opt.input_height = 224
         opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_workers = 40
+        opt.num_classes = 10
+        opt.bs = 32
+    elif(opt.dataset == 'imagenet10small'):
+        opt.input_height = 112
+        opt.input_width = 112
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 10

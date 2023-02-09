@@ -86,12 +86,13 @@ class ResNet(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
+        # out = out.view(out.size(0), -1)
+        out = torch.flatten(out, 1)
         out = self.linear(out)
         return out
 
 
-input_size2scaler = {32: 1, 64: 4, 224: 49}
+input_size2scaler = {32: 1, 64: 4, 112: 9, 224: 49}
 
 
 def ResNet18(num_classes=10, n_input=3, input_size=64):

@@ -12,6 +12,7 @@ def get_arguments():
     parser.add_argument("--saving_prefix", type=str, help="Folder in /checkpoints for saving ckpt")
     parser.add_argument("--attack_mode", default="all2one")
     parser.add_argument("--load_checkpoint", default="")
+    parser.add_argument("--load_checkpoint_clean", type=str)
 
     parser.add_argument("--dataset", type=str, default="cifar10")
     parser.add_argument("--input_height", type=int, default=32)
@@ -23,13 +24,13 @@ def get_arguments():
     parser.add_argument("--lr_C", type=float, default=1e-2)
     parser.add_argument("--lr_G", type=float, default=1e-2)
     parser.add_argument("--lr_clean", type=float, default=1e-2)
-    parser.add_argument("--schedulerC_milestones", type=list, default=[100, 200, 300])
-    parser.add_argument("--schedulerG_milestones", type=list, default=[100, 200, 300])
-    parser.add_argument("--scheduler_clean_milestones", type=list, default=[100, 200, 300])
+    parser.add_argument("--schedulerC_milestones", type=list, default=[100, 150])
+    parser.add_argument("--schedulerG_milestones", type=list, default=[100, 150])
+    parser.add_argument("--scheduler_clean_milestones", type=list, default=[100, 150])
     parser.add_argument("--schedulerC_lambda", type=float, default=0.1)
     parser.add_argument("--schedulerG_lambda", type=float, default=0.1)
     parser.add_argument("--scheduler_clean_lambda", type=float, default=0.1)
-    parser.add_argument("--n_iters", type=int, default=300)
+    parser.add_argument("--n_iters", type=int, default=200)
     parser.add_argument("--num_workers", type=int, default=6)
     parser.add_argument("--lambda_cov", type=float, default=1)
 
@@ -64,12 +65,19 @@ def get_arguments():
     parser.add_argument("--F_dropout", type=float, default=0.5)
     parser.add_argument("--F_num_ensemble", type=int, default=3)
 
+    parser.add_argument("--model_clean", type=str, default="default")
     parser.add_argument("--clean_model_weight", type=float, default=0.8) # weight of clean model loss
 
     parser.add_argument("--noise_only", action="store_true", default=False)
     parser.add_argument("--post_transform_option", type=str, default="use", choices=["use", "no_use", "use_modified"])
-    parser.add_argument("--scale_noise_rate", type=float, default=2.0)
+    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
 
     parser.add_argument("--cross_weight", type=float, default=0.2)
+
+    parser.add_argument("--debug", action="store_true", default=False)
+
+    parser.add_argument("--r", type=float, default=1/4)
+    parser.add_argument("--scale_factor", type=float, default=0.5)
+    parser.add_argument("--scale_mode", type=str, default="bicubic")
 
     return parser

@@ -7,17 +7,20 @@ import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
+import glob
 
 import config
 
 
-def get_transform(opt, train=True):
+def get_transform(opt, train=True, pretensor_transform=False):
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
     # if(train):
     #     transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
     #     transforms_list.append(transforms.RandomRotation(10))
     #     transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
+    if opt.dataset == 'tinyimagenet':
+        transforms_list.append(transforms.Lambda(lambda x: x.convert('RGB')))
     transforms_list.append(transforms.ToTensor())
     # if(opt.dataset == 'cifar10'):
     #     transforms_list.append(transforms.Normalize([0.5], [0.25]))
@@ -117,14 +120,64 @@ class ImageNet(data.Dataset):
         return (input, target)
 
 
-def get_dataloader(opt, train=True, shuffle=True):
-    transform = get_transform(opt, train)
+class TinyImageNet(data.Dataset):
+    def __init__(self, opt, split, transform=None):
+        #self.root = os.path.expanduser(root)
+        self.transform = transform
+        self.split = split
+        self.split_dir = os.path.join(opt.data_root, 'TinyImageNet', self.split)
+        self.image_paths = sorted(glob.iglob(os.path.join(self.split_dir, '**', '*.%s' % 'JPEG'), recursive=True))
+        self.labels = {}  # fname - label number mapping
+        self.images = []  # used for in-memory processing
+        with open(os.path.join(opt.data_root, 'TinyImageNet/wnids.txt'), 'r') as fp:
+                self.label_texts = sorted([text.strip() for text in fp.readlines()])
+        self.label_text_to_number = {text: i for i, text in enumerate(self.label_texts)}
+        
+        # Text label - number mapping 
+        if self.split == 'train':
+            for label_text, i in self.label_text_to_number.items():
+                for cnt in range(500):
+                    self.labels['%s_%d.%s' % (label_text, cnt, 'JPEG')] = i
+        elif self.split == 'val':
+            with open(os.path.join(self.split_dir, 'val_annotations.txt'), 'r') as fp:
+                for line in fp.readlines():
+                    terms = line.split('\t')
+                    file_name, label_text = terms[0], terms[1]
+                    self.labels[file_name] = self.label_text_to_number[label_text]
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def read_image(self, path):
+        img = Image.open(path)
+        return self.transform(img) if self.transform else img
+    
+    def __getitem__(self, index):
+        file_path = self.image_paths[index]
+        img = self.read_image(file_path)
+
+        # if self.split == 'test':
+        #     return img
+        #
+            # file_name = file_path.split('/')[-1]
+        return img, self.labels[os.path.basename(file_path)]
+
+def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None, shuffle=True):
+    if bs is None:
+        bs = opt.bs
+    transform = get_transform(opt, train, pretensor_transform)
     if opt.dataset == "gtsrb":
-        dataset = GTSRB(opt, train, transform)
+        dataset = GTSRB(opt, train, transform, target_label=target_label)
     elif opt.dataset == "mnist":
         dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
+        if target_label is not None:
+            pairs = [(x, y) for x, y in zip(dataset.data, dataset.targets) if int(y) == target_label]
+            dataset.data, dataset.targets = [x[0] for x in pairs], [x[1] for x in pairs]
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+        if target_label is not None:
+            pairs = [(x, y) for x, y in zip(dataset.data, dataset.targets) if int(y) == target_label]
+            dataset.data, dataset.targets = [x[0] for x in pairs], [x[1] for x in pairs]
     elif opt.dataset == "celeba":
         if train:
             split = "train"
@@ -134,13 +187,15 @@ def get_dataloader(opt, train=True, shuffle=True):
     elif(opt.dataset in ['imagenet10', 'imagenet10small']):
         split = 'train' if train else 'val'
         dataset = ImageNet(opt, split, transform)
+    elif opt.dataset == 'tinyimagenet':
+        split = 'train' if train else 'val'
+        dataset = TinyImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
     if opt.debug:
         dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
-
 
 def main():
     opt = config.get_arguments().parse_args()

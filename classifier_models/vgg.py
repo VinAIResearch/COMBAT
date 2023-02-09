@@ -10,7 +10,7 @@ cfg = {
 }
 
 
-input_size2scaler = {32: 1, 64: 4}
+input_size2scaler = {32: 1, 64: 4, 112: 9, 224: 49}
 
 
 class VGG(nn.Module):

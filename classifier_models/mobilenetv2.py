@@ -38,7 +38,7 @@ class Block(nn.Module):
         return out
 
 
-input_size2scaler = {32: 1, 64: 4}
+input_size2scaler = {32: 1, 64: 4, 112: 9, 224: 49}
 
 
 class MobileNetV2(nn.Module):

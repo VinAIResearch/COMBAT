@@ -2,12 +2,15 @@ import csv
 import os
 import random
 
+import config
+
 import kornia.augmentation as A
 import torch
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
+import glob
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -27,11 +30,15 @@ class ProbTransform(torch.nn.Module):
 def get_transform(opt, train=True, pretensor_transform=False):
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
+
+    if opt.dataset == 'tinyimagenet':
+        transforms_list.append(transforms.Lambda(lambda x: x.convert('RGB')))
+    
     if pretensor_transform:
         if train:
             transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop))
             transforms_list.append(transforms.RandomRotation(opt.random_rotation))
-            if opt.dataset == "cifar10":
+            if opt.dataset == "cifar10" or opt.dataset == 'tinyimagenet':
                 transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
 
     transforms_list.append(transforms.ToTensor())
@@ -39,7 +46,7 @@ def get_transform(opt, train=True, pretensor_transform=False):
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
     elif opt.dataset == "mnist":
         transforms_list.append(transforms.Normalize([0.5], [0.5]))
-    elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
+    elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small' or opt.dataset == 'tinyimagenet'):
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # pass
     else:
         raise Exception("Invalid Dataset")
@@ -121,42 +128,6 @@ class GTSRB(data.Dataset):
         return image, label
 
 
-class GTSRB2(data.Dataset):
-    def __init__(self, opt, train, transforms, target_label=None):
-        super(GTSRB2, self).__init__()
-        self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
-        self.images, self.labels = self._get_data_train_list(target_label)
-        self.transforms = transforms
-
-    def _get_data_train_list(self, target_label=None):
-        images = []
-        labels = []
-        l = list(range(0, 43))
-        if target_label is not None:
-            l = [target_label]
-        for c in l:
-            prefix = self.data_folder + "/" + format(c, "05d") + "/"
-            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
-            gtReader = csv.reader(gtFile, delimiter=";")
-            next(gtReader)
-            for row in gtReader:
-                res = int(row[0][:-4][-5:])
-                if res > 27:
-                    images.append(prefix + row[0])
-                    labels.append(int(row[7]))
-            gtFile.close()
-        return images, labels
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        image = Image.open(self.images[index])
-        image = self.transforms(image)
-        label = self.labels[index]
-        return image, label
-
-
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
         self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
@@ -190,6 +161,50 @@ class ImageNet(data.Dataset):
         input, target = self.dataset[index]
         input = self.transforms(input)
         return (input, target)
+    
+
+class TinyImageNet(data.Dataset):
+    def __init__(self, opt, split, transform=None):
+        #self.root = os.path.expanduser(root)
+        self.transform = transform
+        self.split = split
+        self.split_dir = os.path.join(opt.data_root, 'TinyImageNet', self.split)
+        self.image_paths = sorted(glob.iglob(os.path.join(self.split_dir, '**', '*.%s' % 'JPEG'), recursive=True))
+        self.labels = {}  # fname - label number mapping
+        self.images = []  # used for in-memory processing
+        with open(os.path.join(opt.data_root, 'TinyImageNet/wnids.txt'), 'r') as fp:
+                self.label_texts = sorted([text.strip() for text in fp.readlines()])
+        self.label_text_to_number = {text: i for i, text in enumerate(self.label_texts)}
+        
+        # Text label - number mapping 
+        if self.split == 'train':
+            for label_text, i in self.label_text_to_number.items():
+                for cnt in range(500):
+                    self.labels['%s_%d.%s' % (label_text, cnt, 'JPEG')] = i
+        elif self.split == 'val':
+            with open(os.path.join(self.split_dir, 'val_annotations.txt'), 'r') as fp:
+                for line in fp.readlines():
+                    terms = line.split('\t')
+                    file_name, label_text = terms[0], terms[1]
+                    self.labels[file_name] = self.label_text_to_number[label_text]
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def read_image(self, path):
+        img = Image.open(path)
+        return self.transform(img) if self.transform else img
+    
+    def __getitem__(self, index):
+        file_path = self.image_paths[index]
+        img = self.read_image(file_path)
+
+        # if self.split == 'test':
+        #     return img
+        #
+            # file_name = file_path.split('/')[-1]
+        return img, self.labels[os.path.basename(file_path)]
+
 
 
 def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None, shuffle=True):
@@ -198,8 +213,6 @@ def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None
     transform = get_transform(opt, train, pretensor_transform)
     if opt.dataset == "gtsrb":
         dataset = GTSRB(opt, train, transform, target_label=target_label)
-    elif opt.dataset == "gtsrb2":
-        dataset = GTSRB2(opt, train, transform, target_label=target_label)
     elif opt.dataset == "mnist":
         dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
         if target_label is not None:
@@ -219,6 +232,9 @@ def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None
     elif(opt.dataset in ['imagenet10', 'imagenet10small']):
         split = 'train' if train else 'val'
         dataset = ImageNet(opt, split, transform)
+    elif opt.dataset == 'tinyimagenet':
+        split = 'train' if train else 'val'
+        dataset = TinyImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
     if opt.debug:

@@ -300,6 +300,11 @@ def main():
         opt.input_width = 112
         opt.input_channel = 3
         opt.num_classes = 10
+    elif opt.dataset == "tinyimagenet":
+        opt.input_height = 64
+        opt.input_width = 64
+        opt.input_channel = 3
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 
@@ -327,6 +332,8 @@ def main():
 
             best_acc = state_dict["best_acc"]
             epoch_current = state_dict["epoch_current"]
+            
+            tf_writer = SummaryWriter(log_dir=opt.log_dir)
 
         else:
             print("Pretrained model doesnt exist")

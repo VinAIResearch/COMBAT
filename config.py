@@ -40,6 +40,7 @@ def get_arguments():
     parser.add_argument("--cross_rate", type=float, default=1)
     parser.add_argument("--s", type=int, default=2)
     parser.add_argument("--grid_rescale", type=float, default=0.15)
+    parser.add_argument("--ratio", type=float, default=0.3, help="scale ratio for DCT of noise")
 
     parser.add_argument("--random_rotation", type=int, default=10)
     parser.add_argument("--random_crop", type=int, default=5)

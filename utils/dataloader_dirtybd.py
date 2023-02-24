@@ -42,7 +42,7 @@ def get_transform(opt, train=True, pretensor_transform=False):
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
     elif opt.dataset == "mnist":
         transforms_list.append(transforms.Normalize([0.5], [0.5]))
-    elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10' or opt.dataset == 'imagenet10small'):
+    elif(opt.dataset == 'gtsrb' or opt.dataset == 'gtsrb2' or opt.dataset == 'celeba' or opt.dataset == 'imagenet10'):
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # pass
     else:
         raise Exception("Invalid Dataset")
@@ -270,7 +270,7 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=
         else:
             split = "test"
         dataset = PoisonedDataset(CelebA_attr(opt, split, transform), opt.num_classes, opt)
-    elif(opt.dataset in ['imagenet10', 'imagenet10small']):
+    elif opt.dataset == "imagenet10":
         split = 'train' if train else 'val'
         dataset = PoisonedDataset(ImageNet(opt, split, transform), opt.num_classes, opt)
     else:

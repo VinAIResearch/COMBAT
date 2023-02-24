@@ -199,7 +199,7 @@ def get_model(opt):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if(opt.dataset in ['imagenet10', 'imagenet10small', 'tinyimagenet']):
+    if(opt.dataset in ['imagenet10', 'tinyimagenet']):
         netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
@@ -599,12 +599,7 @@ def main():
         opt.input_height = 224
         opt.input_width = 224
         opt.input_channel = 3
-        opt.num_classes = 10
-        opt.bs = 32
-    elif(opt.dataset == 'imagenet10small'):
-        opt.input_height = 112
-        opt.input_width = 112
-        opt.input_channel = 3
+        opt.num_workers = 40
         opt.num_classes = 10
         opt.bs = 32
     elif(opt.dataset == 'tinyimagenet'):

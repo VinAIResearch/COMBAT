@@ -53,7 +53,6 @@ def idct(X, norm="ortho"):
     :param norm: the normalization, None or 'ortho'
     :return: the inverse DCT-II of the signal over the last dimension
     """
-
     x_shape = X.shape
     N = x_shape[-1]
 

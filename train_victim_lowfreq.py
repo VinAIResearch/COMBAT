@@ -147,7 +147,7 @@ def get_model(opt):
     if opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
-    if(opt.dataset in ['imagenet10', 'imagenet10small']):
+    if(opt.dataset == "imagenet10":
         netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         netG = UnetGeneratorDCT(opt, in_size=g_in_size, out_size=g_out_size).to(opt.device)
 
@@ -310,13 +310,6 @@ def main():
     elif(opt.dataset == 'imagenet10'):
         opt.input_height = 224
         opt.input_width = 224
-        opt.input_channel = 3
-        opt.num_workers = 40
-        opt.num_classes = 10
-        opt.bs = 32
-    elif(opt.dataset == 'imagenet10small'):
-        opt.input_height = 112
-        opt.input_width = 112
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 10

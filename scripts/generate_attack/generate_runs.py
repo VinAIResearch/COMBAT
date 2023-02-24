@@ -100,6 +100,8 @@ def make_saving_prefix(task, params, add_clean_postfix=False, add_holdout_postfi
 
     if task.startswith("train_generator"):
         for name, value in params.items():
+            if name not in task_args[task]:
+                continue
             # Skip these args to reduce prefix length
             if check_skip_conditions(name, value):
             # if check_skip_conditions_2(name, value):
@@ -107,12 +109,16 @@ def make_saving_prefix(task, params, add_clean_postfix=False, add_holdout_postfi
             if name == "dataset":
                 name = ""
             # name = shorten_name(name)
+            if isinstance(value, list):
+                value = "".join(value)
             if value is None:
                 value = ""
             saving_prefix += [f"{name}{value}"]
 
     if task.startswith("train_victim"):
         for name, value in params.items():
+            if name not in task_args[task]:
+                continue
             # Skip these args to reduce prefix length
             if check_skip_conditions(name, value):
             # if check_skip_conditions_2(name, value):
@@ -120,12 +126,16 @@ def make_saving_prefix(task, params, add_clean_postfix=False, add_holdout_postfi
             if name == "dataset":
                 name = ""
             # name = shorten_name(name)
+            if isinstance(value, list):
+                value = "".join(value)
             if value is None:
                 value = ""
             saving_prefix += [f"{name}{value}"]
 
     if task.startswith("train_classifier_only"):
         for name, value in params.items():
+            if name not in task_args[task]:
+                continue
             # Skip these args to reduce prefix length
             if check_skip_conditions(name, value):
                 continue
@@ -137,6 +147,8 @@ def make_saving_prefix(task, params, add_clean_postfix=False, add_holdout_postfi
 
     if task.startswith("eval"):
         for name, value in params.items():
+            if name not in task_args[task]:
+                continue
             # Skip these args to reduce prefix length
             if check_skip_conditions(name, value):
                 continue
@@ -196,10 +208,22 @@ def make_cmd(task, params, level=0):
     if task.startswith("train_victim"):
         for name, value in params.items():
             if name == "load_checkpoint":
-                value = find_train_generator_saving_prefix(task, params, True)
+                if task in ["train_victim_fixhtestnewfdidea", "train_victim_gumbelattack", "train_victim_discreteattack"]:
+                    temp_task = task.replace(task, "train_generator_fixh")
+                    train_params = deepcopy(params)
+                    train_params["F_model"] = "original"
+                    if "lr_C" in train_params:
+                        train_params["lr_C"] = 0.001
+                    if "lr_G" in train_params:
+                        train_params["lr_G"] = 0.001
+                    value = make_saving_prefix(temp_task, train_params, True)
+                else:
+                    value = find_train_generator_saving_prefix(task, params, True)
             if name == "lr":  # Hack :P
                 name = f"lr_C {value}"
                 value = f"--lr_G {value}"
+            if isinstance(value, list):
+                value = " ".join(value)
             if value is None:
                 value = ""
             cmd += f" --{name} {value}"
@@ -235,7 +259,7 @@ def make_cmd(task, params, level=0):
 
     if args["debug"]:
         cmd += f" --debug"
-        cmd += f" --n_iters 2"
+        cmd += f" --n_iters 1"
 
     return cmd
 
@@ -292,7 +316,7 @@ def make_FD_cmd(task, params, dataset, level=0):
 
     if args["debug"]:
         cmd += f" --debug"
-        cmd += f" --n_iters 2"
+        cmd += f" --n_iters 1"
 
     return cmd
 
@@ -391,8 +415,8 @@ if __name__ == "__main__":
     # Attack args
     parser.add_argument("--debug", default=False)
     parser.add_argument("--output_format", type=str, choices=["sbatch", "bash"],
-        default="sbatch",
-        # default="bash",
+        # default="sbatch",
+        default="bash",
     )
     parser.add_argument("--have_dependency", default=False)
     parser.add_argument("--continue_training", default=False)
@@ -445,9 +469,9 @@ if __name__ == "__main__":
         "train_victim_fixhmultilabel":                      ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint"],
 
         # Fix h
-        # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint"],
+        "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint"],
         # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "num_classes"],
-        "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "lr_C", "lr_G"],
+        # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "lr_C", "lr_G"],
         # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "lr", "F_dropout", "post_transform_option", "scale_noise_rate"],
         # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "F_dropout", "post_transform_option", "scale_noise_rate"],
         # "train_victim_fixh":                                ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_model_eval", "load_checkpoint", "new_normalize"],
@@ -460,6 +484,14 @@ if __name__ == "__main__":
 
         # Low-frequency trigger
         "train_victim_lowfreq":                             ["dataset", "noise_rate", "pc", "L2_weight", "model", "F_model", "r", "load_checkpoint"],
+
+        # Test if decoupling FD adv attack from the generator training process helps to bypass FD defense
+        # "train_victim_fixhtestnewfdidea":                   ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "alpha", "steps", "load_checkpoint"],
+        # "train_victim_fixhtestnewfdidea":                   ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "alpha", "steps", "load_checkpoint", "lr_C", "lr_G"],
+        "train_victim_fixhtestnewfdidea":                   ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "k", "confidence", "load_checkpoint", "lr_C", "lr_G"],
+        # "train_victim_fixhtestnewfdidea3":                   ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "k", "confidence", "load_checkpoint", "lr_C", "lr_G"],
+        "train_victim_gumbelattack":                        ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "load_checkpoint", "lr_C", "lr_G", "optimizer"],
+        "train_victim_discreteattack":                      ["dataset", "noise_rate", "pc", "F_weight", "L2_weight", "clean_model_weight", "model", "model_clean", "F_model", "F_models", "eps", "L1_weight", "temp", "load_checkpoint", "lr_C", "lr_G", "optimizer"],
     }
 
     FD_task_args = {
@@ -496,16 +528,22 @@ if __name__ == "__main__":
         # "train_victim_fixhscheduledcleanmodelweight",
         # "train_victim_fixfh",
         # "train_victim_fixhinterpolate",
-        "train_victim_lowfreq",
+        # "train_victim_lowfreq",
+        # "train_victim_fixhtestnewfdidea",
+        "train_victim_gumbelattack",
+        # "train_victim_discreteattack",
     ])
 
     # Args for universal hyperparameters
     parser.add_argument("--dataset", type=str, nargs="+", default=[
-        "cifar10",
+        # "cifar10",
         # "gtsrb",
         # "celeba",
-        # "imagenet10",
+        "imagenet10",
         # "imagenet10small",
+        # "imagenet10smaller",
+        # "imagenet10smallest",
+        # "tinyimagenet",
     ])
     parser.add_argument("--noise_rate", type=float, nargs="+", default=[
         # 0.01,
@@ -514,10 +552,10 @@ if __name__ == "__main__":
         # 0.04,
         # 0.05,
         # 0.06,
-        # 0.08,  # CIFAR10, CelebA, ImageNet10
-        0.125,
-        0.15,  # GTSRB
-        0.2,
+        0.08,  # CIFAR10, CelebA, ImageNet10
+        # 0.125,
+        # 0.15,  # GTSRB
+        # 0.2,
     ])
     parser.add_argument("--pc", type=float, nargs="+", default=[
         # 0,
@@ -531,11 +569,12 @@ if __name__ == "__main__":
 
     # Misc hyperparameters
     parser.add_argument("--lr", type=float, nargs="+", default=[0.001])
-    parser.add_argument("--lr_C", type=float, nargs="+", default=[0.001])
-    parser.add_argument("--lr_G", type=float, nargs="+", default=[0.001])
+    parser.add_argument("--lr_C", type=float, nargs="+", default=[100])
+    parser.add_argument("--lr_G", type=float, nargs="+", default=[100])
     parser.add_argument("--lr_clean", type=float, nargs="+", default=[0.001])
     parser.add_argument("--F_weight", type=float, nargs="+", default=[
-        0.08,
+        0,
+        # 0.08,
         # 0.1,
         # 0.15,
         # 0.2,
@@ -556,10 +595,52 @@ if __name__ == "__main__":
         # 1/16,
     ])
     parser.add_argument("--scale_factor", type=float, nargs="+", default=[
-        0.5,
+        0.125,
     ])
     parser.add_argument("--scale_mode", type=str, nargs="+", default=[
-        "bicubic"
+        "bilinear",
+        "bicubic",
+    ])
+    parser.add_argument("--eps", type=float, nargs="+", default=[
+        # 0,
+        # 4/255,
+        # 8/255,
+        # 16/255,
+        # 32/255,
+        # 128/255,
+        # 1,
+        32,
+        # 50,
+    ])
+    parser.add_argument("--k", type=float, nargs="+", default=[
+        0.1,
+    ])
+    parser.add_argument("--confidence", type=float, nargs="+", default=[
+        0.8,
+    ])
+    parser.add_argument("--alpha", type=float, nargs="+", default=[
+        1/255,
+        # 2/255,
+        # 4/255,
+        # 8/255,
+        # 16/255
+    ])
+    parser.add_argument("--steps", type=float, nargs="+", default=[
+        # 1,
+        # 3,
+        # 5,
+        # 10,
+        20,
+    ])
+    parser.add_argument("--optimizer", type=str, nargs="+", default=[
+        "sgd",
+        # "adam",
+    ])
+    parser.add_argument("--L1_weight", type=float, nargs="+", default=[
+        0.1
+    ])
+    parser.add_argument("--temp", type=float, nargs="+", default=[
+        1.0
     ])
 
     # Args for many models involve
@@ -581,12 +662,34 @@ if __name__ == "__main__":
     ])
     parser.add_argument("--F_model", type=str, nargs="+", default=[
         "original",  # CIFAR10, CelebA
-        # "original_dropout",  # GTSRB
+        # "densenet121",
+        # "vgg13",
+        # "mobilenetv2",
+        # "resnet18",
+        # "efficientnetb0",
+        # "googlenet",
+        # "googlenetadadelta",
     ])
-    parser.add_argument("--F_model_eval", type=str, nargs="+", default=["original_holdout"])
+    parser.add_argument("--F_model_eval", type=str, nargs="+", default=[
+        "original_holdout",
+        # "densenet121_holdout",
+        # "vgg13_holdout",
+        # "mobilenetv2_holdout",
+        # "resnet18_holdout",
+        # "efficientnetb0_holdout",
+        # "googlenet_holdout",
+        # "googlenetadadelta_holdout",
+    ])
 
     # Args specifically for GTSRB
-    # parser.add_argument("--F_models", type=list, nargs="+", default=[["original", "mobilenetv2"]])
+    parser.add_argument("--F_models", type=list, nargs="+", default=[[
+        # "original",
+        "original_holdout",
+        "mobilenetv2",
+        "vgg13",
+        "resnet18",
+        # "densenet121",
+    ]])
     # parser.add_argument("--F_num_ensemble", type=int, nargs="+", default=[3])
     parser.add_argument("--F_dropout", type=float, nargs="+", default=[0.5])
     parser.add_argument("--post_transform_option", type=str, nargs="+", choices=["use", "no_use", "use_modified"], default=["no_use"])
@@ -619,23 +722,31 @@ if __name__ == "__main__":
     ])
 
     parser.add_argument("--FD_dataset", type=str, nargs="+", default=[
-        "same", # use the same FD checkpoint's dataset with the target model's dataset
+        # "same", # use the same FD checkpoint's dataset with the target model's dataset
         # "cifar10",
         # "gtsrb",
         # "celeba",
-        # "imagenet10",
+        "imagenet10",
+        # "tinyimagenet",
     ])
 
     parser.add_argument("--FD_model", type=str, nargs="+", default=[
-        "original",
-        "original_holdout",
-        # "densenet121",
+        # "original",
+        # "original_holdout",
+        "densenet121",
+        # "densenet121_holdout",
         # "vgg13",
-        # "mobilenetv2",
+        # "vgg13_holdout",
+        "mobilenetv2",
+        # "mobilenetv2_holdout",
         # "resnet18",
+        # "resnet18_holdout",
         # "efficientnetb0",
+        # "efficientnetb0_holdout",
         # "googlenet",
+        # "googlenet_holdout",
         # "googlenetadadelta",
+        # "googlenetadadelta_holdout",
     ])
 
     args = vars(parser.parse_args())

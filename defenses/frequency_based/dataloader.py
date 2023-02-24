@@ -15,14 +15,12 @@ import config
 def get_transform(opt, train=True):
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
-
-    if opt.dataset == 'tinyimagenet':
-        transforms_list.append(transforms.Lambda(lambda x: x.convert('RGB')))
-
     # if(train):
     #     transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
     #     transforms_list.append(transforms.RandomRotation(10))
     #     transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
+    if opt.dataset == 'tinyimagenet':
+        transforms_list.append(transforms.Lambda(lambda x: x.convert('RGB')))
     transforms_list.append(transforms.ToTensor())
     # if(opt.dataset == 'cifar10'):
     #     transforms_list.append(transforms.Normalize([0.5], [0.25]))
@@ -191,7 +189,6 @@ def get_dataloader(opt, train=True, shuffle=True):
         dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
-
 
 def main():
     opt = config.get_arguments().parse_args()

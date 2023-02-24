@@ -333,6 +333,8 @@ def main():
 
             best_acc = state_dict["best_acc"]
             epoch_current = state_dict["epoch_current"]
+            
+            tf_writer = SummaryWriter(log_dir=opt.log_dir)
 
         else:
             print("Pretrained model doesnt exist")

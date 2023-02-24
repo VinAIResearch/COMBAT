@@ -153,27 +153,32 @@ def get_model(opt):
     if opt.model in ["original", "original_holdout"]:
         netC = FrequencyModel(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
-    if opt.model == "vgg13":
+    if opt.model in ["vgg13", "vgg13_holdout"]:
         netC = VGG("VGG13", num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "densenet121":
+    if opt.model in ["densenet121", "densenet121_holdout"]:
         netC = DenseNet121(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "mobilenetv2":
+    if opt.model in ["mobilenetv2", "mobilenetv2_holdout"]:
         netC = MobileNetV2(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "resnet18":
+    if opt.model in ["resnet18", "resnet18_holdout"]:
         netC = ResNet18(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "efficientnetb0":
+    if opt.model in ["efficientnetb0", "efficientnetb0_holdout"]:
         netC = efficientnet_b0(num_classes=2).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "squeezenet":
+    if opt.model in ["squeezenet", "squeezenet_holdout"]:
         netC = squeezenet1_0(num_classes=2).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
-    if opt.model == "googlenet":
+    if opt.model in ["googlenet", "googlenet_holdout"]:
         netC = googlenet(num_classes=2, aux_logits=False).to(opt.device)
         optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
+
+    if opt.dataset == "imagenet10":
+        # Scale down lr since we are scaling down batch size
+        lr = optimizerC.param_groups[0]["lr"]
+        optimizerC.param_groups[0]["lr"] = lr * (8 / 64)
 
     return netC, optimizerC
 
@@ -295,11 +300,12 @@ def main():
         opt.input_width = 224
         opt.input_channel = 3
         opt.num_classes = 10
-    elif(opt.dataset == 'imagenet10small'):
-        opt.input_height = 112
-        opt.input_width = 112
+        opt.bs = 8
+    elif(opt.dataset == 'tinyimagenet'):
+        opt.input_height = 64
+        opt.input_width = 64
         opt.input_channel = 3
-        opt.num_classes = 10
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 

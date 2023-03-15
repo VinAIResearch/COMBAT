@@ -1,15 +1,11 @@
-# COMBAT: Alternated Training for Near-Perfect Clean-Label Backdoor Attack
+# COMBAT: Alternated Training for Effective Clean-Label Backdoor Attack
 
-This repository contains the code to replicate experiments in our paper **COMBAT: Alternated Training for Near-Perfect Clean-Label Backdoor Attack**
+This repository contains the code to replicate experiments in our paper **COMBAT: Alternated Training for Effective Clean-Label Backdoor Attack**
 
 # Requirements
-- Install required python packages:
+Install required Python packages:
 ```
 $ python -m pip install -r requirements.txt
-```
-- Download and re-organize GTSRB dataset from its official website:
-```
-$ bash gtsrb_download.sh
 ```
 # Training trigger generator and surrogate model 
 Run command
@@ -18,7 +14,7 @@ $ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise
 ``` 
 
 where the parameters are as following:
-- `dataset`: `cifar10` | `gtsrb` | `celeba`
+- `dataset`: `cifar10` | `imagenet10` | `celeba`
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
 
@@ -58,8 +54,7 @@ We also provide code of defense methods evaluated in the paper inside the folder
 - **Fine-pruning**: We have separate code for different datasets due to network architecture differences. Run the command
 ```
 $ cd defenses/fine_pruning
-$ python fine-pruning-cifar10-gtsrb.py --dataset cifar10 --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --outfile <outfileName>
-$ python fine-pruning-celeba.py --dataset celeba --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --outfile <outfileName>
+$ python fine-pruning.py --dataset <datasetName> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --outfile <outfileName>
 ```
 The results will be printed on the screen and written in file `<outfileName>.txt`
 - **STRIP**: Run the command
@@ -71,7 +66,7 @@ The results will be printed on the screen and all entropy values are logged in `
 - **Neural Cleanse**: Run the command
 ```
 $ cd defenses/neural_cleanse
-$ python neural_cleanse.py --dataset <datasetName> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python neural_cleanse.py --dataset <datasetName> --saving_prefix <savingPrefix>
 ```
 The result will be printed on screen and logged in `results` folder.
 - **GradCAM**: Run the command

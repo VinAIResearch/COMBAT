@@ -5,15 +5,17 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision.transforms as T
 import torch.nn.functional as F
 
 from config import get_arguments
 
 sys.path.insert(0, "../..")
-from classifier_models import PreActResNet10, PreActResNet18
+from classifier_models import PreActResNet18, ResNet18
 from networks.models import AE, Denormalizer, Normalizer, UnetGenerator
 from utils.dataloader import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import *
 
 
 def create_targets_bd(targets, opt):
@@ -26,6 +28,28 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
+
+def convert(mask):
+    mask_len = len(mask)
+    converted_mask = torch.ones(mask_len * 4, dtype=bool)
+    for i in range(4):
+        for j in range(mask_len):
+            try:
+                converted_mask[4 * j + i] = mask[j]
+            except:
+                print(i, j)
+                input()
+    return converted_mask
+
 def eval(netC, netG, test_dl, opt):
     print(" Eval:")
     acc_clean = 0.0
@@ -33,6 +57,8 @@ def eval(netC, netG, test_dl, opt):
     total_sample = 0
     total_correct_clean = 0
     total_correct_bd = 0
+
+    gauss_smooth = T.GaussianBlur(kernel_size=3, sigma=(0.1, 1))
 
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
@@ -45,7 +71,9 @@ def eval(netC, netG, test_dl, opt):
 
             # Evaluate Backdoor
             noise_bd = netG(inputs)
+            noise_bd = low_freq(noise_bd, opt)
             inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = gauss_smooth(inputs_bd)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
             total_correct_bd += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
@@ -64,11 +92,16 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
+    elif opt.dataset == "celeba":
+        opt.num_classes = 8
+        opt.input_height = 64
+        opt.input_width = 64
         opt.input_channel = 3
-        opt.num_classes = 13
+    elif opt.dataset == "imagenet10":
+        opt.num_classes = 10
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
     else:
         raise Exception("Invalid Dataset")
 
@@ -76,8 +109,11 @@ def main():
     if opt.dataset == "cifar10":
         netC = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    elif opt.dataset == "gtsrb":
-        netC = PreActResNet18(num_classes=43).to(opt.device)
+    elif opt.dataset == "celeba":
+        netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
+    elif opt.dataset == "imagenet10":
+        netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     else:
         raise Exception("Invalid dataset")
@@ -131,20 +167,41 @@ def main():
                 channel = seq_sort[index - 1]
                 pruning_mask[channel] = False
             print("Pruned {} filters".format(num_pruned))
-
             net_pruned.layer4[1].conv2 = nn.Conv2d(pruning_mask.shape[0], pruning_mask.shape[0] - num_pruned, (3, 3), stride=1, padding=1, bias=False)
-            net_pruned.linear = nn.Linear(pruning_mask.shape[0] - num_pruned, 10)
+            if opt.dataset == "cifar10":
+                net_pruned.linear = nn.Linear(pruning_mask.shape[0] - num_pruned, opt.num_classes)
 
-            # Re-assigning weight to the pruned net
-            for name, module in net_pruned._modules.items():
-                if "layer4" in name:
-                    module[1].conv2.weight.data = netC.layer4[1].conv2.weight.data[pruning_mask]
-                    module[1].ind = pruning_mask
-                elif "linear" == name:
-                    module.weight.data = netC.linear.weight.data[:, pruning_mask]
-                    module.bias.data = netC.linear.bias.data
-                else:
-                    continue
+                # Re-assigning weight to the pruned net
+                for name, module in net_pruned._modules.items():
+                    if "layer4" in name:
+                        module[1].conv2.weight.data = netC.layer4[1].conv2.weight.data[pruning_mask]
+                        module[1].ind = pruning_mask
+                    elif "linear" == name:
+                        module.weight.data = netC.linear.weight.data[:, pruning_mask]
+                        module.bias.data = netC.linear.bias.data
+                    else:
+                        continue
+            
+            elif opt.dataset == "celeba" or opt.dataset == "imagenet10":
+                net_pruned.linear = nn.Linear(4 * (pruning_mask.shape[0] - num_pruned), opt.num_classes)
+
+                # Re-assigning weight to the pruned net
+                for name, module in net_pruned._modules.items():
+                    if "layer4" in name:
+                        module[1].conv2.weight.data = netC.layer4[1].conv2.weight.data[pruning_mask]
+                        module[1].bn2.running_mean = netC.layer4[1].bn2.running_mean[pruning_mask]
+                        module[1].bn2.running_var = netC.layer4[1].bn2.running_var[pruning_mask]
+                        module[1].bn2.weight.data = netC.layer4[1].bn2.weight.data[pruning_mask]
+                        module[1].bn2.bias.data = netC.layer4[1].bn2.bias.data[pruning_mask]
+
+                        module[1].ind = pruning_mask
+
+                    elif "linear" == name:
+                        converted_mask = convert(pruning_mask)
+                        module.weight.data = netC.linear.weight.data[:, converted_mask]
+                        module.bias.data = netC.linear.bias.data
+                    else:
+                        continue
             net_pruned.to(opt.device)
             clean, bd = eval(net_pruned, netG, test_dl, opt)
             outs.write("%d %0.4f %0.4f\n" % (index, clean, bd))

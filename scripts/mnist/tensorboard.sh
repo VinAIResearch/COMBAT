@@ -1,1 +1,0 @@
-tensorboard --logdir ./checkpoints/static_smooth_morph/mnist/log_dir --host 127.0.0.1 --port 6006

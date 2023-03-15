@@ -1,1 +1,0 @@
-python inputaware_training.py --clamp --nearest 1 --scale 1.5 --dataset cifar10 --input_height 32 --input_width 32 --input_channel 3

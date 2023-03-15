@@ -1,1 +1,0 @@
-source /vinai/anhnt479/activate_anaconda.sh

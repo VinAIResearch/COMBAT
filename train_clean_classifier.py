@@ -191,8 +191,8 @@ def main():
 
     # Load pretrained model
     mode = opt.saving_prefix
-    opt.ckpt_folder = os.path.join(opt.checkpoints, '{}_clean'.format(mode), opt.dataset)
-    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_{}_clean.pth.tar'.format(opt.dataset, mode))
+    opt.ckpt_folder = os.path.join(opt.checkpoints, '{}'.format(mode), opt.dataset)
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, '{}_{}.pth.tar'.format(opt.dataset, mode))
     opt.log_dir = os.path.join(opt.ckpt_folder, 'log_dir')
     create_dir(opt.log_dir)
 

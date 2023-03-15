@@ -7,10 +7,18 @@ Install required Python packages:
 ```
 $ python -m pip install -r requirements.txt
 ```
+# Training clean model
+Run command
+```
+$ python train_clean_classifier.py --dataset <datasetName> --load_checkpoint_clean <cleanModelPrefix>
+```
+The trained checkpoint of the clean model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
+
+
 # Training trigger generator and surrogate model 
 Run command
 ```
-$ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix>
 ``` 
 
 where the parameters are as following:
@@ -35,7 +43,8 @@ $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <trig
 ```
 # Sample run
 ```
-$ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_generator_n008_pc05
+$ python train_clean_classifier.py --dataset cifar10 --load_checkpoint_clean classifier_clean
+$ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08  --saving_prefix train_generator_n008_pc05 --load_checkpoint_clean classifier_clean
 $ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoint train_generator_n008_pc05_clean
 $ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  
 ```

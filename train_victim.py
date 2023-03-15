@@ -6,21 +6,21 @@ import numpy as np
 import timm
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import torchvision
 import torchvision.transforms.functional as fn
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import efficientnet_b0
 from torchvision.transforms import RandomErasing
 from vit_pytorch import SimpleViT
 
 import config
-from classifier_models import (VGG, MobileNetV2, PreActResNet10,
+from classifier_models import (VGG, MobileNetV2,
                                PreActResNet18, ResNet18)
-from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
-                             NetC_MNIST3, Normalizer, UnetGenerator)
+from networks.models import (AE, Denormalizer, Normalizer, UnetGenerator)
 from utils.dataloader_cleanbd import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import *
 
 
 class ViT(SimpleViT):
@@ -29,45 +29,23 @@ class ViT(SimpleViT):
         super().__init__(image_size=input_size, channels=n_input, *args, **kwargs)
 
 
-def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
-    """ViT-Tiny (Vit-Ti)"""
-    patch_size = input_size // 16
-    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = timm.models.vision_transformer._create_vision_transformer("vit_tiny_patch16_224", pretrained=False, **model_kwargs)
-    return model
-
-
-def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
-    """ViT-Small (ViT-S)"""
-    patch_size = input_size // 16
-    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = timm.models.vision_transformer._create_vision_transformer("vit_small_patch16_224", pretrained=False, **model_kwargs)
-    return model
-
-
-def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
-    """ViT-Base (ViT-B)"""
-    patch_size = input_size // 16
-    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = timm.models.vision_transformer._create_vision_transformer("vit_base_patch16_224", pretrained=False, **model_kwargs)
-    return model
-
-
 C_MAPPING_NAMES = {
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
-    "efficientnetb0": efficientnet_b0,
     "vit": partial(ViT, patch_size=4, dim=768, depth=6, heads=8, mlp_dim=1024),
     "simplevitsmall8": partial(ViT, patch_size=8, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
-    "simplevitsmall4": partial(ViT, patch_size=4, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
-    "simplevitsmall2": partial(ViT, patch_size=2, dim=384, depth=12, heads=6, mlp_dim=384 * 4),
-    "simplevitbase8": partial(ViT, patch_size=8, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
-    "simplevitbase4": partial(ViT, patch_size=4, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
-    "simplevitbase2": partial(ViT, patch_size=2, dim=768, depth=12, heads=12, mlp_dim=768 * 4),
-    "vittiny": vit_tiny,
-    "vitsmall": vit_small,
-    "vitbase": vit_base,
 }
+
+
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
 
 
 def create_dir(path_dir):
@@ -99,18 +77,13 @@ def get_model(opt):
     netG = None
 
     if opt.dataset == "cifar10":
-        # Model
         netC = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "gtsrb":
-        # Model
-        netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
-    if opt.dataset == "celeba":
+    elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
+    elif opt.dataset == 'imagenet10':
+        netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
     if opt.model != "default":
@@ -139,6 +112,8 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
     criterion_BCE = torch.nn.BCELoss()
     criterion_L2 = torch.nn.MSELoss()
 
+    gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
+
     denormalizer = Denormalizer(opt)
     transforms = PostTensorTransform(opt)
 
@@ -156,7 +131,11 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         num_bd = trg_ind.shape[0]
         inputs_toChange = inputs[trg_ind]
         noise_bd = netG(inputs_toChange)
+        if inputs_toChange.shape[0] != 0:
+            noise_bd = low_freq(noise_bd, opt)
         inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        if inputs_bd.shape[0] != 0:
+            inputs_bd = gauss_smooth(inputs_bd)
         total_inputs = torch.cat([inputs_bd, inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat([bd_targets[trg_ind], targets[ntrg_ind]], dim=0)
@@ -202,6 +181,8 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
     total_clean_correct = 0
     total_bd_correct = 0
 
+    gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
+
     criterion_BCE = torch.nn.BCELoss()
     for batch_idx, (inputs, targets, _) in enumerate(test_dl):
         with torch.no_grad():
@@ -218,10 +199,9 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
             inputs_toChange = inputs[ntrg_ind]
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
-            if opt.dataset == "gtsrb":
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
-            else:
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            noise_bd = low_freq(noise_bd, opt)
+            inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = gauss_smooth(inputs_bd)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
@@ -254,21 +234,19 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
-    elif opt.dataset == "mnist":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 1
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif opt.dataset == 'imagenet10':
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_workers = 40
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 

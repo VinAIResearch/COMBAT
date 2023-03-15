@@ -13,6 +13,7 @@ import torch.nn as nn
 from model import FrequencyModel
 from scipy.fftpack import dct, idct
 from torch.nn import functional as F
+import torchvision.transforms as T
 
 import config
 
@@ -22,11 +23,20 @@ from torchvision.models import efficientnet_b0, googlenet, squeezenet1_0
 from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
 from networks.models import UnetGenerator
 from utils.dataloader import get_dataloader
-
+from utils.dct import *
 
 def dct2(block):
     return dct(dct(block.T, norm="ortho").T, norm="ortho")
 
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
 
 def get_model(opt):
     netC = None
@@ -67,19 +77,23 @@ def test(netC, netG, test_dl, opt):
     total_poi_sample = 0
 
     detection = 0
+
+    gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
     for batch_idx, (x, y) in enumerate(test_dl):
         with torch.no_grad():
             bs = x.shape[0]
             x, y = x.to(opt.device), y.to(opt.device)
             noise = netG(x)
+            noise = low_freq(noise, opt)
             poi_x = torch.clamp(x + opt.noise_rate * noise, -1, 1)
+            poi_x = gauss_smooth(poi_x)
             x_test = x.detach().cpu().numpy()
             poi_x_test = poi_x.detach().cpu().numpy()
             x_dct_test = np.vstack((x_test, poi_x_test))
             y_dct_test = (np.vstack((np.zeros((bs, 1)), np.ones((bs, 1))))).astype(int)
             for i in range(x_dct_test.shape[0]):
                 for channel in range(3):
-                    x_dct_test[i][channel, :, :] = dct2(((x_dct_test[i][channel, :, :] + np.ones_like(x_dct_test[i][channel, :, :])) / 2 * 255).astype(np.uint8))
+                    x_dct_test[i][channel, :, :] = dct_2d(((x_dct_test[i][channel, :, :] + np.ones_like(x_dct_test[i][channel, :, :])) / 2 * 255).astype(np.uint8))
             x_final_test = torch.tensor(x_dct_test, device=opt.device, dtype=torch.float)
             y_final_test = torch.tensor(np.ndarray.flatten(y_dct_test).astype(int).tolist(), device=opt.device)
             preds = netC(x_final_test)
@@ -103,21 +117,16 @@ def main():
         opt.input_width = 32
         opt.input_channel = 3
         opt.num_classes = 10
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
-    elif opt.dataset == "mnist":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 1
-        opt.num_classes = 10
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
     else:
         raise Exception("Invalid Dataset")
 

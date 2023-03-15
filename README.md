@@ -23,7 +23,7 @@ The trained checkpoint of the generator and surrogate model should be saved at t
 # Train victim model
 Run command
 ```
-$ python train_victim.py --dataset <datasetName> --attack_mode <attackMode> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
+$ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
 ```
 `load_checkpoint`: trained generator checkpoint folder name.
 
@@ -47,7 +47,6 @@ To run other attack configurations (warping-based trigger, input-aware trigger, 
 ```
 $ python train_generator_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 $ python train_victim_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
-$ python eval_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
 ```
 # Defense experiments
 We also provide code of defense methods evaluated in the paper inside the folder `defenses`.

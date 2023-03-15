@@ -11,9 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
 
 import config
-from classifier_models import PreActResNet10, PreActResNet18, ResNet18
-from networks.models import (AE, Denormalizer, GridGenerator, NetC_MNIST,
-                             NetC_MNIST2, NetC_MNIST3, Normalizer)
+from classifier_models import PreActResNet18, ResNet18
+from networks.models import (AE, Denormalizer, GridGenerator, Normalizer)
 from utils.dataloader_cleanbd import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
 
@@ -40,15 +39,6 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
-# def create_bd(inputs, opt):
-#    sx = 1.05
-#    sy = 1
-#    nw = int(inputs.shape[3] * sx)
-#    nh = int(inputs.shape[2] * sy)
-#    inputs_bd = fn.center_crop(fn.resize(inputs, (nh, nw)), inputs.shape[2:])
-#    return inputs_bd
-
-
 def get_model(opt):
     netC = None
     optimizerC = None
@@ -56,18 +46,16 @@ def get_model(opt):
     netG = None
 
     if opt.dataset == "cifar10":
-        # Model
         netC = PreActResNet18().to(opt.device)
+        clean_model = PreActResNet18().to(opt.device)
         netG = GridGenerator(opt).to(opt.device)
-    if opt.dataset == "gtsrb":
-        # Model
-        netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = GridGenerator(opt).to(opt.device)
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        netG = GridGenerator(opt, in_channels=1).to(opt.device)
-    if opt.dataset == "celeba":
+    elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = GridGenerator(opt).to(opt.device)
+    elif opt.dataset == 'imagenet10':
+        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         netG = GridGenerator(opt).to(opt.device)
 
     # Optimizer
@@ -222,21 +210,19 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
-    elif opt.dataset == "mnist":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 1
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif opt.dataset == 'imagenet10':
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_workers = 40
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 

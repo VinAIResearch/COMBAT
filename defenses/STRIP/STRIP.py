@@ -6,16 +6,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import torchvision
 from dataloader import get_dataloader, get_dataset
 from torchvision import transforms
 
-from config import get_argument
+import config
 
 sys.path.insert(0, "../..")
 from classifier_models import PreActResNet18, ResNet18
-from networks.models import Denormalizer, NetC_MNIST, Normalizer, UnetGenerator
+from networks.models import Denormalizer, Normalizer, UnetGenerator
+from utils.dataloader import get_dataloader, get_dataset
 from utils.utils import progress_bar
+from utils.dct import *
 
 
 class Normalize:
@@ -45,6 +48,15 @@ class Denormalize:
             x_clone[:, :, channel] = x[:, :, channel] * self.variance[channel] + self.expected_values[channel]
         return x_clone
 
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
 
 class STRIP:
     def _superimpose(self, background, overlay):
@@ -68,22 +80,14 @@ class STRIP:
         return entropy_sum / self.n_sample
 
     def _get_denormalize(self, opt):
-        if opt.dataset == "cifar10":
-            denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-        elif opt.dataset == "mnist":
-            denormalizer = Denormalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "celeba":
+        if opt.dataset == "cifar10" or opt.dataset == "celeba" or opt.dataset == "imagenet10":
             denormalizer = Denormalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")
         return denormalizer
 
     def _get_normalize(self, opt):
-        if opt.dataset == "cifar10":
-            normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-        elif opt.dataset == "mnist":
-            normalizer = Normalize(opt, [0.5], [0.5])
-        elif opt.dataset == "gtsrb" or opt.dataset == "celeba":
+        if opt.dataset == "cifar10" or opt.dataset == "celeba" or opt.dataset == "imagenet10":
             normalizer = Normalize(opt, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         else:
             raise Exception("Invalid dataset")
@@ -117,12 +121,10 @@ class STRIP:
 def strip(opt, mode="clean"):
 
     # Prepare pretrained classifier
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST().to(opt.device)
-    elif opt.dataset == "cifar10" or opt.dataset == "gtsrb":
+    if opt.dataset == "cifar10":
         netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-    elif opt.dataset == "celeba":
-        netC = ResNet18().to(opt.device)
+    elif opt.dataset == "celeba" or opt.dataset == "imagenet10":
+        netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
     else:
         raise Exception("Invalid dataset")
 
@@ -160,11 +162,14 @@ def strip(opt, mode="clean"):
 
     if mode == "attack":
         # Testing with perturbed data
+        gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
         print("Testing with bd data !!!!")
         inputs, targets = next(iter(test_dataloader))
         inputs = inputs.to(opt.device)
         noise_bd = netG(inputs)
+        noise_bd = low_freq(noise_bd, opt)
         bd_inputs = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+        bd_inputs = gauss_smooth(bd_inputs)
         bd_inputs = denormalizer(bd_inputs) * 255.0
         bd_inputs = bd_inputs.detach().cpu().numpy()
         bd_inputs = np.clip(bd_inputs, 0, 255).astype(np.uint8).transpose((0, 2, 3, 1))
@@ -192,24 +197,25 @@ def strip(opt, mode="clean"):
 
 
 def main():
-    opt = get_argument().parse_args()
+    opt = config.get_arguments().parse_args()
     if opt.dataset == "cifar10":
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-        opt.num_classes = 10
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
+        opt.num_workers = 40
         opt.num_classes = 8
+    elif(opt.dataset == 'imagenet10'):
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
+        opt.bs = 32
     else:
-        raise Exception("Invalid dataset")
+        raise Exception("Invalid Dataset")
 
     if "2" in opt.attack_mode:
         mode = "attack"

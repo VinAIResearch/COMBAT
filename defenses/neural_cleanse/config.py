@@ -5,11 +5,11 @@ def get_argument():
     parser = argparse.ArgumentParser()
 
     # Directory option
-    parser.add_argument("--checkpoints", type=str, default="../../checkpoints0/")
-    parser.add_argument("--data_root", type=str, default="/home/paris/Downloads/Github/Backdoor2/input-aware-backdoor-attack/data/")
+    parser.add_argument("--checkpoints", type=str, default="../../checkpoints/")
+    parser.add_argument("--data_root", type=str, default="../../data/")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--result", type=str, default="./results")
-    parser.add_argument("--dataset", type=str, default="mnist")
+    parser.add_argument("--dataset", type=str, default="cifar10")
     parser.add_argument("--attack_mode", type=str, default="all2one")
     parser.add_argument("--temps", type=str, default="./temps")
     parser.add_argument("--saving_prefix", type=str, help="Folder in /checkpoints for saving ckpt")

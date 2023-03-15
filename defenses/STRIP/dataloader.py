@@ -32,58 +32,6 @@ def get_transform(opt, train=True):
     return transforms.Compose(transforms_list)
 
 
-class GTSRB(data.Dataset):
-    def __init__(self, opt, train, transforms):
-        super(GTSRB, self).__init__()
-        if target_label is not None:
-            assert target_label < opt.num_classes
-        self.num_classes = opt.num_classes
-        if train:
-            self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
-            self.images, self.labels = self._get_data_train_list()
-        else:
-            self.data_folder = os.path.join(opt.data_root, "GTSRB/Test")
-            self.images, self.labels = self._get_data_test_list()
-
-        self.transforms = transforms
-
-    def _get_data_train_list(self):
-        images = []
-        labels = []
-        for c in range(0, self.num_classes):
-            prefix = self.data_folder + "/" + format(c, "05d") + "/"
-            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
-            gtReader = csv.reader(gtFile, delimiter=";")
-            next(gtReader)
-            for row in gtReader:
-                images.append(prefix + row[0])
-                labels.append(int(row[7]))
-            gtFile.close()
-        return images, labels
-
-    def _get_data_test_list(self, target_label=None):
-        images = []
-        labels = []
-        prefix = os.path.join(self.data_folder, "GT-final_test.csv")
-        gtFile = open(prefix)
-        gtReader = csv.reader(gtFile, delimiter=";")
-        next(gtReader)
-        l = set(range(0, self.num_classes))
-        for row in gtReader:
-            if int(row[7]) in l:
-                images.append(self.data_folder + "/" + row[0])
-                labels.append(int(row[7]))
-        return images, labels
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        image = Image.open(self.images[index])
-        image = self.transforms(image)
-        label = self.labels[index]
-        return image, label
-
 
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
@@ -105,11 +53,24 @@ class CelebA_attr(data.Dataset):
         return (input, target)
 
 
+class ImageNet(data.Dataset):
+    def __init__(self, opt, split, transforms):
+        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.transforms = transforms
+        self.split = split
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
+        return (input, target)
+
+
 def get_dataloader(opt, train=True):
     transform = get_transform(opt, train)
-    if opt.dataset == "gtsrb":
-        dataset = GTSRB(opt, train, transform)
-    elif opt.dataset == "cifar10":
+    if opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
     elif opt.dataset == "celeba":
         if train:
@@ -117,16 +78,18 @@ def get_dataloader(opt, train=True):
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
+    elif opt.dataset == 'imagenet10':
+        split = 'train' if train else 'val'
+        dataset = ImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
+    
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=True)
     return dataloader
 
 
 def get_dataset(opt, train=True):
-    if opt.dataset == "gtsrb":
-        dataset = GTSRB(opt, train, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
-    elif opt.dataset == "cifar10":
+    if opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform=ToNumpy(), download=True)
     elif opt.dataset == "celeba":
         if train:
@@ -134,7 +97,9 @@ def get_dataset(opt, train=True):
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
-
+    elif opt.dataset == 'imagenet10':
+        split = 'train' if train else 'val'
+        dataset = ImageNet(opt, split, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
     else:
         raise Exception("Invalid dataset")
     return dataset

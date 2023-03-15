@@ -12,6 +12,10 @@ def get_argument():
     parser.add_argument("--dataset", type=str, default="cifar10")
     parser.add_argument("--attack_mode", type=str, default="all2one")
     parser.add_argument("--temps", type=str, default="./temps")
+    parser.add_argument("--noise_rate", type=float, default=0.08)
+    parser.add_argument("--ratio", type=float, default=0.65, help="scale ratio for DCT of noise")
+    parser.add_argument("--kernel_size", type=int, default=3, help="kernel size for Gaussian blur")
+    parser.add_argument("--sigma", type=tuple, default=(0.1, 1.0), help="sigma for Gaussian blur")
 
     # ---------------------------- For STRIP --------------------------
     # Model hyperparameters

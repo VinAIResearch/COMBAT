@@ -38,12 +38,8 @@ def get_transform(opt, train=True, pretensor_transform=False):
                 transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
 
     transforms_list.append(transforms.ToTensor())
-    if opt.dataset == "cifar10":
+    if opt.dataset in ["cifar10", "celeba", "imagenet10"]:
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
-    elif opt.dataset == "mnist":
-        transforms_list.append(transforms.Normalize([0.5], [0.5]))
-    elif opt.dataset == "gtsrb" or opt.dataset == "gtsrb2" or opt.dataset == "celeba":
-        transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # pass
     else:
         raise Exception("Invalid Dataset")
     return transforms.Compose(transforms_list)
@@ -53,7 +49,7 @@ class PostTensorTransform(torch.nn.Module):
     def __init__(self, opt):
         super(PostTensorTransform, self).__init__()
         if opt.post_transform_option != "no_use":
-            if not (opt.dataset != "gtsrb" and opt.post_transform_option == "use_modified"):
+            if not (opt.post_transform_option == "use_modified"):
                 self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
             self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
             if opt.dataset == "cifar10":
@@ -63,129 +59,6 @@ class PostTensorTransform(torch.nn.Module):
         for module in self.children():
             x = module(x)
         return x
-
-
-class GTSRB(data.Dataset):
-    def __init__(self, opt, train, transforms):
-        super(GTSRB, self).__init__()
-        assert opt.target_label < opt.num_classes
-        self.num_classes = opt.num_classes
-        if opt.attack_mode == "all2one":
-            target_label = {opt.target_label}
-        else:
-            target_label = set(range(0, opt.num_classes))
-        if train:
-            self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
-            self.images, self.labels, self.poisoned = self._get_data_train_list(target_label, opt.pc)
-        else:
-            self.data_folder = os.path.join(opt.data_root, "GTSRB/Test")
-            self.images, self.labels, self.poisoned = self._get_data_test_list(target_label, opt.pc)
-        self.transforms = transforms
-
-    def _get_data_train_list(self, target_label, pc):
-        images = []
-        labels = []
-        poisoned = []
-        l = list(range(self.num_classes))
-        for c in l:
-            prefix = self.data_folder + "/" + format(c, "05d") + "/"
-            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
-            gtReader = csv.reader(gtFile, delimiter=";")
-            next(gtReader)
-            for row in gtReader:
-                images.append(prefix + row[0])
-                labels.append(int(row[7]))
-                if c in target_label:  # Define poisoning status
-                    if random.random() < pc:
-                        poisoned.append(True)
-                    else:
-                        poisoned.append(False)
-                else:
-                    poisoned.append(False)
-            gtFile.close()
-        return images, labels, poisoned
-
-    def _get_data_test_list(self, target_label, pc):
-        images = []
-        labels = []
-        poisoned = []
-        prefix = os.path.join(self.data_folder, "GT-final_test.csv")
-        gtFile = open(prefix)
-        gtReader = csv.reader(gtFile, delimiter=";")
-        next(gtReader)
-        l = set(range(self.num_classes))
-        for row in gtReader:
-            if int(row[7]) in l:
-                images.append(self.data_folder + "/" + row[0])
-                labels.append(int(row[7]))
-                if int(row[7]) in target_label:  # Define poisoning status
-                    if random.random() < pc:
-                        poisoned.append(True)
-                    else:
-                        poisoned.append(False)
-                else:
-                    poisoned.append(False)
-
-        return images, labels, poisoned
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        image = Image.open(self.images[index])
-        image = self.transforms(image)
-        label = self.labels[index]
-        poisoned = self.poisoned[index]
-        return image, label, poisoned
-
-
-class GTSRB2(data.Dataset):
-    def __init__(self, opt, train, transforms):
-        super(GTSRB2, self).__init__()
-        if opt.attack_mode == "all2one":
-            target_label = {opt.target_label}
-        else:
-            target_label = set(range(0, 43))
-        self.data_folder = os.path.join(opt.data_root, "GTSRB/Train")
-        self.images, self.labels, self.poisoned = self._get_data_train_list(target_label, opt.pc)
-        self.transforms = transforms
-
-    def _get_data_train_list(self, target_label, pc):
-        images = []
-        labels = []
-        poisoned = []
-        l = list(range(0, 43))
-        if target_label is not None:
-            l = [target_label]
-        for c in l:
-            prefix = self.data_folder + "/" + format(c, "05d") + "/"
-            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
-            gtReader = csv.reader(gtFile, delimiter=";")
-            next(gtReader)
-            for row in gtReader:
-                res = int(row[0][:-4][-5:])
-                if res > 27:
-                    images.append(prefix + row[0])
-                    labels.append(int(row[7]))
-                    if int(row[7]) in target_label:  # Define poisoning status
-                        if random.random() < pc:
-                            poisoned.append(True)
-                        else:
-                            poisoned.append(False)
-                    else:
-                        poisoned.append(False)
-            gtFile.close()
-        return images, labels, poisoned
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        image = Image.open(self.images[index])
-        image = self.transforms(image)
-        label = self.labels[index]
-        poisoned = self.poisoned[index]
-        return image, label, poisoned
 
 
 class CelebA_attr(data.Dataset):  # Have not  updated
@@ -205,6 +78,21 @@ class CelebA_attr(data.Dataset):  # Have not  updated
         input, target = self.dataset[index]
         input = self.transforms(input)
         target = self._convert_attributes(target[self.list_attributes])
+        return (input, target)
+
+
+class ImageNet(data.Dataset):
+    def __init__(self, opt, split, transforms):
+        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.transforms = transforms
+        self.split = split
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
         return (input, target)
 
 
@@ -241,6 +129,8 @@ class CelebA_attr(data.Dataset):  # Have not  updated
 class PoisonedDataset(data.Dataset):
     def __init__(self, refdata, n_classes, opt):
         self.dataset = refdata
+        if opt.debug:
+            self.dataset = torch.utils.data.Subset(self.dataset, range(min(len(self.dataset), 1000)))
         if opt.attack_mode == "all2one":
             target_label = {opt.target_label}
         else:
@@ -252,7 +142,7 @@ class PoisonedDataset(data.Dataset):
         for idx, (_, label) in enumerate(tqdm(self.dataset, desc="Define poisoning status")):
             if int(label) in target_label:  # Define poisoning status
                 targeted_image_ids.append(idx)
-        num_poisoned = max(1, int(pc * len(targeted_image_ids)))
+        num_poisoned = max(0, int(pc * len(targeted_image_ids)))
         print(f"Poison {num_poisoned} images ({pc * len(targeted_image_ids)})")
         poisoned = set(random.sample(targeted_image_ids, num_poisoned))
         return poisoned
@@ -270,13 +160,7 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=
     if bs is None:
         bs = opt.bs
     transform = get_transform(opt, train, pretensor_transform)
-    if opt.dataset == "gtsrb":
-        dataset = GTSRB(opt, train, transform)
-    elif opt.dataset == "gtsrb2":
-        dataset = GTSRB2(opt, train, transform)
-    elif opt.dataset == "mnist":
-        dataset = PoisonedDataset(torchvision.datasets.MNIST(opt.data_root, train, transform, download=True), opt.num_classes, opt)
-    elif opt.dataset == "cifar10":
+    if opt.dataset == "cifar10":
         dataset = PoisonedDataset(torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True), opt.num_classes, opt)
     elif opt.dataset == "celeba":
         if train:
@@ -284,22 +168,18 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=
         else:
             split = "test"
         dataset = PoisonedDataset(CelebA_attr(opt, split, transform), opt.num_classes, opt)
+    elif opt.dataset == 'imagenet10':
+        split = 'train' if train else 'val'
+        dataset = PoisonedDataset(ImageNet(opt, split, transform), opt.num_classes, opt)
     else:
         raise Exception("Invalid dataset")
+    if opt.debug:
+        dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
     return dataloader
 
 
 def main():
-    # opt = config.get_arguments().parse_args()
-    # transforms = get_transform(opt, False)
-    # dataloader = get_dataloader(opt, False)
-    # for item in dataloader:
-    #     images, labels = item
-    # opt = config.get_arguments().parse_args()
-    # dataset = torchvision.datasets.CelebA(root=opt.data_root, split='test',
-    #                                       target_type='identity', download=True)
-    # sooka = dataset[51439]
     pass
 
 

@@ -4,6 +4,7 @@ import shutil
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import torchvision
 import torchvision.transforms.functional as fn
 from torch import nn
@@ -11,11 +12,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import RandomErasing
 
 import config
-from classifier_models import PreActResNet10, PreActResNet18, ResNet18
-from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
-                             NetC_MNIST3, Normalizer, UnetGenerator)
+from classifier_models import PreActResNet18, ResNet18
+from networks.models import (AE, Denormalizer, Normalizer, UnetGenerator)
 from utils.dataloader_cleanbd import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import dct_2d, idct_2d
 
 
 def create_dir(path_dir):
@@ -40,13 +41,32 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
-# def create_bd(inputs, opt):
-#    sx = 1.05
-#    sy = 1
-#    nw = int(inputs.shape[3] * sx)
-#    nh = int(inputs.shape[2] * sy)
-#    inputs_bd = fn.center_crop(fn.resize(inputs, (nh, nw)), inputs.shape[2:])
-#    return inputs_bd
+gauss_smooth = T.GaussianBlur(kernel_size=3, sigma=(0.1, 1))
+
+
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
+
+
+def create_inputs_bd_from_noise(inputs, noise_bd, opt):
+    if inputs.shape[0] != 0:
+        noise_bd = low_freq(noise_bd, opt)
+    inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+    if inputs_bd.shape[0] != 0:
+        inputs_bd = gauss_smooth(inputs_bd)
+    return inputs_bd
+
+
+def create_inputs_bd(inputs, netG, opt):
+    noise_bd = netG(inputs)
+    return create_inputs_bd_from_noise(inputs, noise_bd, opt)
 
 
 def get_model(opt):
@@ -56,18 +76,16 @@ def get_model(opt):
     netG = None
 
     if opt.dataset == "cifar10":
-        # Model
         netC = PreActResNet18().to(opt.device)
+        clean_model = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "gtsrb":
-        # Model
-        netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
-    if opt.dataset == "celeba":
+    elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
+    elif opt.dataset == 'imagenet10':
+        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
     # Optimizer
@@ -112,8 +130,9 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         # if num_bd < 1:
         #    continue
         inputs_toChange = inputs[trg_ind]
-        noise_bd = netG(inputs_toChange)
-        inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        # noise_bd = netG(inputs_toChange)
+        # inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
         total_inputs = torch.cat([inputs_bd, inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat([bd_targets[trg_ind], targets[ntrg_ind]], dim=0)
@@ -181,7 +200,8 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, test_dl2, best_clean_acc, 
             inputs_toChange = inputs[ntrg_ind]
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
-            inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            # inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = create_inputs_bd_from_noise(inputs_toChange, noise_bd, opt)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
@@ -190,7 +210,8 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, test_dl2, best_clean_acc, 
 
             # Evaluate Cross-trigger accuracy
             noise_bd2 = netG(inputs2)
-            inputs_bd2 = torch.clamp(inputs + noise_bd2 * opt.noise_rate, -1, 1)
+            # inputs_bd2 = torch.clamp(inputs + noise_bd2 * opt.noise_rate, -1, 1)
+            inputs_bd2 = create_inputs_bd_from_noise(inputs, noise_bd2, opt)
             preds_cross = netC(inputs_bd2)
 
             # Exclude target-class samples
@@ -227,23 +248,22 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
-    elif opt.dataset == "mnist":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 1
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif opt.dataset == 'imagenet10':
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
+
+    opt.num_workers = 0
 
     # Dataset
     train_dl = get_dataloader(opt, True)

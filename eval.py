@@ -6,21 +6,21 @@ import numpy as np
 import timm
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import torchvision
 import torchvision.transforms.functional as fn
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import efficientnet_b0
 from torchvision.transforms import RandomErasing
 from vit_pytorch import SimpleViT
 
 import config
 from classifier_models import (VGG, MobileNetV2, PreActResNet10,
                                PreActResNet18, ResNet18)
-from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
-                             NetC_MNIST3, Normalizer, UnetGenerator)
+from networks.models import (AE, Denormalizer, Normalizer, UnetGenerator)
 from utils.dataloader import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import *
 
 
 class ViT(SimpleViT):
@@ -29,13 +29,6 @@ class ViT(SimpleViT):
         patch_size = input_size // 8
         super().__init__(image_size=input_size, patch_size=patch_size, channels=n_input, *args, **kwargs)
 
-
-def vit_tiny(num_classes=10, n_input=3, input_size=32, **kwargs):
-    """ViT-Tiny (Vit-Ti)"""
-    patch_size = input_size // 16
-    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = timm.models.vision_transformer._create_vision_transformer("vit_tiny_patch16_224", pretrained=False, **model_kwargs)
-    return model
 
 
 def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
@@ -46,24 +39,22 @@ def vit_small(num_classes=10, n_input=3, input_size=32, **kwargs):
     return model
 
 
-def vit_base(num_classes=10, n_input=3, input_size=32, **kwargs):
-    """ViT-Base (ViT-B)"""
-    patch_size = input_size // 16
-    model_kwargs = dict(num_classes=num_classes, img_size=input_size, patch_size=patch_size, in_chans=n_input, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = timm.models.vision_transformer._create_vision_transformer("vit_base_patch16_224", pretrained=False, **model_kwargs)
-    return model
-
-
 C_MAPPING_NAMES = {
     "vgg13": partial(VGG, "VGG13"),
     "mobilenetv2": MobileNetV2,
-    "efficientnetb0": efficientnet_b0,
     "vit": partial(ViT, dim=768, depth=6, heads=8, mlp_dim=1024),
-    "vittiny": vit_tiny,
     "vitsmall": vit_small,
-    "vitbase": vit_base,
 }
 
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
 
 def create_dir(path_dir):
     list_subdir = path_dir.strip(".").split("/")
@@ -75,7 +66,6 @@ def create_dir(path_dir):
             os.mkdir(base_dir)
         except:
             pass
-
 
 def create_targets_bd(targets, opt):
     if opt.attack_mode == "all2one":
@@ -92,18 +82,13 @@ def get_model(opt):
     netG = None
 
     if opt.dataset == "cifar10":
-        # Model
         netC = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "gtsrb":
-        # Model
-        netC = PreActResNet18(num_classes=opt.num_classes).to(opt.device)
-        netG = UnetGenerator(opt).to(opt.device)
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST3().to(opt.device)  # PreActResNet10(n_input=1).to(opt.device) #NetC_MNIST().to(opt.device)
-        netG = UnetGenerator(opt, in_channels=1).to(opt.device)
-    if opt.dataset == "celeba":
+    elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
+        netG = UnetGenerator(opt).to(opt.device)
+    elif opt.dataset == 'imagenet10':
+        netC = ResNet18(num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
     if opt.model != "default":
@@ -118,7 +103,10 @@ def eval(netC, netG, test_dl, tf_writer, opt):
     total_clean_sample = 0
     total_bd_sample = 0
     total_clean_correct = 0
-    total_bd_correct = 0
+    total_bd_ba = 0
+    total_bd_asr = 0
+    
+    gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
 
     for batch_idx, (inputs, targets) in enumerate(test_dl):
         with torch.no_grad():
@@ -135,24 +123,25 @@ def eval(netC, netG, test_dl, tf_writer, opt):
             inputs_toChange = inputs[ntrg_ind]
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
-            if opt.dataset == "gtsrb":
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
-            else:
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            noise_bd = low_freq(noise_bd, opt)
+            inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = gauss_smooth(inputs_bd)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
+            total_bd_ba += torch.sum(torch.argmax(preds_bd, 1) == targets_toChange)
+            total_bd_asr += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
-            acc_bd = total_bd_correct * 100.0 / total_bd_sample
+            acc_bd_ba = total_bd_ba * 100.0 / total_bd_sample
+            acc_bd_asr = total_bd_asr * 100.0 / total_bd_sample
 
-            info_string = "Clean Acc: {:.4f} | Bd Acc: {:.4f}".format(acc_clean, acc_bd)
+            info_string = "Clean Acc: {:.4f} | Bd BA: {:.4f} | Bd ASR: {:.4f}".format(acc_clean, acc_bd_ba, acc_bd_asr)
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
-    tf_writer.add_scalars("Corrected Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd}, 0)
+    tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd BA": acc_bd_ba, "Bd ASR": acc_bd_asr}, 0)
 
 
 def main():
@@ -161,21 +150,19 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 3
-        opt.num_classes = 13
-    elif opt.dataset == "mnist":
-        opt.input_height = 32
-        opt.input_width = 32
-        opt.input_channel = 1
     elif opt.dataset == "celeba":
         opt.input_height = 64
         opt.input_width = 64
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
+    elif opt.dataset == 'imagenet10':
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
+        opt.num_workers = 40
+        opt.num_classes = 10
+        opt.bs = 32
     else:
         raise Exception("Invalid Dataset")
 
@@ -192,8 +179,8 @@ def main():
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     create_dir(opt.log_dir)
 
-    # Load G
-    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint))
+    # Load clean model
+    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint_clean, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint_clean))
     if not os.path.exists(load_path):
         print("Error: {} not found".format(load_path))
         exit()
@@ -201,6 +188,14 @@ def main():
         state_dict = torch.load(load_path)
         netC.load_state_dict(state_dict["netC"])
         netC.eval()
+
+    # Load G
+    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint))
+    if not os.path.exists(load_path):
+        print("Error: {} not found".format(load_path))
+        exit()
+    else:
+        state_dict = torch.load(load_path)
         netG.load_state_dict(state_dict["netG"])
         netG.eval()
 

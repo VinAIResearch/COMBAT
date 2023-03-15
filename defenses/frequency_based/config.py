@@ -20,8 +20,13 @@ def get_arguments():
     parser.add_argument("--n_iters", type=int, default=50)
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--noise_rate", type=float, default=0.08)
+    parser.add_argument("--ratio", type=float, default=0.65, help="scale ratio for DCT of noise")
+    parser.add_argument("--kernel_size", type=int, default=3, help="kernel size for Gaussian blur")
+    parser.add_argument("--sigma", default=(0.1, 1.0), help="sigma for Gaussian blur")
     parser.add_argument("--continue_training", action="store_true")
     parser.add_argument("--load_checkpoint", default="../../checkpoints")
     parser.add_argument("--saving_prefix", type=str, help="Folder in /checkpoints for saving ckpt")
+    parser.add_argument("--scale_noise_rate", type=float, default=1.0)
+    parser.add_argument("--debug", action="store_true", default=False)
 
     return parser

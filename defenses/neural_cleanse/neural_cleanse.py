@@ -49,10 +49,10 @@ def main():
 
     opt = config.get_argument().parse_args()
 
-    if opt.dataset == "mnist" or opt.dataset == "cifar10":
+    if opt.dataset == "cifar10" or opt.dataset == "imagenet10":
         opt.total_label = 10
-    elif opt.dataset == "gtsrb":
-        opt.total_label = 43
+    elif opt.dataset == "celeba":
+        opt.total_label = 8
     else:
         raise Exception("Invalid Dataset")
 
@@ -60,14 +60,16 @@ def main():
         opt.input_height = 32
         opt.input_width = 32
         opt.input_channel = 3
-    elif opt.dataset == "gtsrb":
-        opt.input_height = 32
-        opt.input_width = 32
+    elif opt.dataset == "celeba":
+        opt.num_classes = 8
+        opt.input_height = 64
+        opt.input_width = 64
         opt.input_channel = 3
-    elif opt.dataset == "mnist":
-        opt.input_height = 28
-        opt.input_width = 28
-        opt.input_channel = 1
+    elif opt.dataset == "imagenet10":
+        opt.num_classes = 10
+        opt.input_height = 224
+        opt.input_width = 224
+        opt.input_channel = 3
     else:
         raise Exception("Invalid Dataset")
 

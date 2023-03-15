@@ -10,9 +10,9 @@ $ python -m pip install -r requirements.txt
 # Training clean model
 Run command
 ```
-$ python train_clean_classifier.py --dataset <datasetName> --load_checkpoint_clean <cleanModelPrefix>
+$ python train_clean_classifier.py --dataset <datasetName> --saving_prefix <cleanModelPrefix>
 ```
-The trained checkpoint of the clean model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
+The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
 
 
 # Training trigger generator and surrogate model 
@@ -31,7 +31,7 @@ The trained checkpoint of the generator and surrogate model should be saved at t
 # Train victim model
 Run command
 ```
-$ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoints>
+$ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoint>
 ```
 `load_checkpoint`: trained generator checkpoint folder name.
 
@@ -39,14 +39,14 @@ The trained checkpoint of the victim model should be saved at the path `checkpoi
 # Evaluate victim model
 Run command
 ```
-$ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix>
+$ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix> --load_checkpoint <trainedCheckpoint>
 ```
 # Sample run
 ```
-$ python train_clean_classifier.py --dataset cifar10 --load_checkpoint_clean classifier_clean
+$ python train_clean_classifier.py --dataset cifar10 --saving_prefix classifier_clean
 $ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08  --saving_prefix train_generator_n008_pc05 --load_checkpoint_clean classifier_clean
 $ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoint train_generator_n008_pc05_clean
-$ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  
+$ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05 --load_checkpoint_clean classifier_clean --load_checkpoint train_generator_n008_pc05_clean
 ```
 # Pretrained models
 We also provide pretrained checkpoints used in the original paper. The checkpoints could be found [here](https://drive.google.com/drive/folders/1YnHTkeSiOzRlXbjd6OKLs9jXHWSikATQ?usp=sharing) (anonymously). You can download and put them in this repository for evaluating.

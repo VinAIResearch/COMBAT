@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --partition={partition}
-#SBATCH --output={slurm_log}/%x-%j.out
-#SBATCH --error={slurm_log}/%x-%j.out
-#SBATCH --job-name={job_name}
+#SBATCH --output={slurm_log}/{job_name}-%j.out
+#SBATCH --error={slurm_log}/{job_name}-%j.out
+#SBATCH --job-name=gan_diffusion
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1

@@ -6,6 +6,7 @@ import numpy as np
 import timm
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import torchvision
 import torchvision.transforms.functional as fn
 from torch import nn
@@ -21,6 +22,7 @@ from networks.models import (AE, Denormalizer, NetC_MNIST, NetC_MNIST2,
                              NetC_MNIST3, Normalizer, UnetGenerator)
 from utils.dataloader_cleanbd import PostTensorTransform, get_dataloader
 from utils.utils import progress_bar
+from utils.dct import dct_2d, idct_2d
 
 
 class ViT(SimpleViT):
@@ -93,6 +95,30 @@ def create_targets_bd(targets, opt):
     return bd_targets.to(opt.device)
 
 
+gauss_smooth = T.GaussianBlur(kernel_size=3, sigma=(0.1, 1))
+
+
+def low_freq(x, opt):
+    image_size = opt.input_height
+    ratio = opt.ratio
+    mask = torch.zeros_like(x)
+    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
+    x_dct = dct_2d((x+1)/2*255)
+    x_dct *= mask
+    x_idct = (idct_2d(x_dct)/255*2) - 1
+    return x_idct
+
+
+def create_inputs_bd(inputs, netG, opt):
+    noise_bd = netG(inputs)
+    if inputs.shape[0] != 0:
+        noise_bd = low_freq(noise_bd, opt)
+    inputs_bd = torch.clamp(inputs + noise_bd * opt.noise_rate, -1, 1)
+    if inputs_bd.shape[0] != 0:
+        inputs_bd = gauss_smooth(inputs_bd)
+    return inputs_bd
+
+
 def get_model(opt):
     netC = None
     optimizerC = None
@@ -159,8 +185,9 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         ntrg_ind = (poisoned == False).nonzero()[:, 0]
         num_bd = trg_ind.shape[0]
         inputs_toChange = inputs[trg_ind]
-        noise_bd = netG(inputs_toChange)
-        inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        # noise_bd = netG(inputs_toChange)
+        # inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
         total_inputs = torch.cat([inputs_bd, inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat([bd_targets[trg_ind], targets[ntrg_ind]], dim=0)
@@ -221,11 +248,12 @@ def eval(netC, optimizerC, schedulerC, netG, test_dl, best_clean_acc, best_bd_ac
             ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
             inputs_toChange = inputs[ntrg_ind]
             targets_toChange = targets[ntrg_ind]
-            noise_bd = netG(inputs_toChange)
-            if opt.dataset == "gtsrb":
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
-            else:
-                inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            # noise_bd = netG(inputs_toChange)
+            # if opt.dataset == "gtsrb":
+            #     inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate * opt.scale_noise_rate, -1, 1)
+            # else:
+            #     inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+            inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 

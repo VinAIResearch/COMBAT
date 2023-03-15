@@ -42,7 +42,7 @@ def get_transform(opt, train=True, pretensor_transform=False):
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
     elif opt.dataset == "mnist":
         transforms_list.append(transforms.Normalize([0.5], [0.5]))
-    elif opt.dataset == "gtsrb" or opt.dataset == "gtsrb2" or opt.dataset == "celeba":
+    elif opt.dataset in ["gtsrb", "gtsrb2", "celeba", "imagenet10"]:
         transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # pass
     else:
         raise Exception("Invalid Dataset")
@@ -208,6 +208,21 @@ class CelebA_attr(data.Dataset):  # Have not  updated
         return (input, target)
 
 
+class ImageNet(data.Dataset):
+    def __init__(self, opt, split, transforms):
+        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.transforms = transforms
+        self.split = split
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
+        return (input, target)
+
+
 # class PoisonedDataset(data.Dataset):
 #     def __init__(self, refdata, n_classes, opt):
 #         self.dataset = refdata
@@ -272,6 +287,9 @@ def get_dataloader(opt, train=True, pretensor_transform=False, bs=None, shuffle=
         else:
             split = "test"
         dataset = PoisonedDataset(CelebA_attr(opt, split, transform), opt.num_classes, opt)
+    elif opt.dataset == "imagenet10":
+        split = 'train' if train else 'val'
+        dataset = PoisonedDataset(ImageNet(opt, split, transform), opt.num_classes, opt)
     else:
         raise Exception("Invalid dataset")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)

@@ -21,12 +21,12 @@ If you find this repo useful for your research, please consider citing our paper
 }
 ```
 
-# Requirements
+## Requirements
 Install required Python packages:
 ```
 $ python -m pip install -r requirements.txt
 ```
-# Training clean model
+## Training clean model
 Run command
 ```
 $ python train_clean_classifier.py --dataset <datasetName> --saving_prefix <cleanModelPrefix>
@@ -34,7 +34,7 @@ $ python train_clean_classifier.py --dataset <datasetName> --saving_prefix <clea
 The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
 
 
-# Training trigger generator and surrogate model 
+## Training trigger generator and surrogate model 
 Run command
 ```
 $ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix>
@@ -47,7 +47,7 @@ where the parameters are as following:
 
 The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 
-# Train victim model
+## Train victim model
 Run command
 ```
 $ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoint>
@@ -55,28 +55,28 @@ $ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_ra
 `load_checkpoint`: trained generator checkpoint folder name.
 
 The trained checkpoint of the victim model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
-# Evaluate victim model
+## Evaluate victim model
 Run command
 ```
 $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix> --load_checkpoint <trainedCheckpoint>
 ```
-# Sample run
+## Sample run
 ```
 $ python train_clean_classifier.py --dataset cifar10 --saving_prefix classifier_clean
 $ python train_generator.py --dataset cifar10 --pc 0.5 --noise_rate 0.08  --saving_prefix train_generator_n008_pc05 --load_checkpoint_clean classifier_clean
 $ python train_victim.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05  --load_checkpoint train_generator_n008_pc05_clean
 $ python eval.py --dataset cifar10 --pc 0.5 --noise_rate 0.08 --saving_prefix train_victim_n008_pc05 --load_checkpoint_clean classifier_clean --load_checkpoint train_generator_n008_pc05_clean
 ```
-# Pretrained models
+## Pretrained models
 We also provide pretrained checkpoints used in the original paper. The checkpoints could be found [here](https://drive.google.com/drive/folders/1YnHTkeSiOzRlXbjd6OKLs9jXHWSikATQ?usp=sharing) (anonymously). You can download and put them in this repository for evaluating.
 
-# Customized attack configurations
+## Customized attack configurations
 To run other attack configurations (warping-based trigger, input-aware trigger, imperceptible trigger, multiple target labels), follow similar steps mentioned above. For example, to run multiple target labels attack, run the commands:
 ```
 $ python train_generator_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix>
 $ python train_victim_multilabel.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoint>
 ```
-# Defense experiments
+## Defense experiments
 We also provide code of defense methods evaluated in the paper inside the folder `defenses`.
 - **Fine-pruning**: We have separate code for different datasets due to network architecture differences. Run the command
 ```

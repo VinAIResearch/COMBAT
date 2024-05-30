@@ -9,7 +9,8 @@ Details of the implementation and experimental results can be found in [our pape
 - Pretrained checkpoints.
 
 If you find this repo useful for your research, please consider citing our paper
-\cite{@inproceedings{huynh2024combat,
+```
+@inproceedings{huynh2024combat,
   title={COMBAT: Alternated Training for Effective Clean-Label Backdoor Attacks},
   author={Huynh, Tran and Nguyen, Dang and Pham, Tung and Tran, Anh},
   booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
@@ -18,7 +19,7 @@ If you find this repo useful for your research, please consider citing our paper
   pages={2436--2444},
   year={2024}
 }
-}
+```
 
 # Requirements
 Install required Python packages:

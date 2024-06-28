@@ -4,7 +4,7 @@ Paper: "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks
 
 Reference: https://github.com/keras-team/keras-applications/blob/master/keras_applications/efficientnet.py
 """
-import torch
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -23,11 +23,20 @@ class Block(nn.Module):
 
         # Expansion
         planes = expand_ratio * in_planes
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
         # Depthwise conv
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2, groups=planes, bias=False)
+        self.conv2 = nn.Conv2d(
+            planes,
+            planes,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=(kernel_size - 1) // 2,
+            groups=planes,
+            bias=False,
+        )
         self.bn2 = nn.BatchNorm2d(planes)
 
         # SE layers
@@ -36,13 +45,15 @@ class Block(nn.Module):
         self.se2 = nn.Conv2d(se_planes, planes, kernel_size=1)
 
         # Output
-        self.conv3 = nn.Conv2d(planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv3 = nn.Conv2d(
+            planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes)
 
         self.shortcut = nn.Sequential()
         if stride == 1 and in_planes != out_planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
+                nn.Conv2d(in_planes, out_planes, kernel_size=1,
+                          stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_planes),
             )
 
@@ -67,7 +78,8 @@ class EfficientNet(nn.Module):
     def __init__(self, cfg, num_classes=10):
         super(EfficientNet, self).__init__()
         self.cfg = cfg
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3,
+                               stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.layers = self._make_layers(in_planes=32)
         self.linear = nn.Linear(cfg[-1][1], num_classes)
@@ -77,7 +89,10 @@ class EfficientNet(nn.Module):
         for expansion, out_planes, num_blocks, kernel_size, stride in self.cfg:
             strides = [stride] + [1] * (num_blocks - 1)
             for stride in strides:
-                layers.append(Block(in_planes, out_planes, kernel_size, stride, expansion, se_ratio=0.25, drop_rate=0.2))
+                layers.append(
+                    Block(in_planes, out_planes, kernel_size, stride,
+                          expansion, se_ratio=0.25, drop_rate=0.2)
+                )
                 in_planes = out_planes
         return nn.Sequential(*layers)
 
@@ -92,5 +107,13 @@ class EfficientNet(nn.Module):
 
 def EfficientNetB0():
     # (expansion, out_planes, num_blocks, kernel_size, stride)
-    cfg = [(1, 16, 1, 3, 1), (6, 24, 2, 3, 2), (6, 40, 2, 5, 2), (6, 80, 3, 3, 2), (6, 112, 3, 5, 1), (6, 192, 4, 5, 2), (6, 320, 1, 3, 1)]
+    cfg = [
+        (1, 16, 1, 3, 1),
+        (6, 24, 2, 3, 2),
+        (6, 40, 2, 5, 2),
+        (6, 80, 3, 3, 2),
+        (6, 112, 3, 5, 1),
+        (6, 192, 4, 5, 2),
+        (6, 320, 1, 3, 1),
+    ]
     return EfficientNet(cfg)

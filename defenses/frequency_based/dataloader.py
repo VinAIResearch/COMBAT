@@ -1,19 +1,18 @@
 import csv
 import os
 
-import numpy as np
+import config
 import torch
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
 
-import config
-
 
 def get_transform(opt, train=True):
     transforms_list = []
-    transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
+    transforms_list.append(transforms.Resize(
+        (opt.input_height, opt.input_width)))
     # if(train):
     #     transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
     #     transforms_list.append(transforms.RandomRotation(10))
@@ -84,7 +83,8 @@ class GTSRB(data.Dataset):
 
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
+        self.dataset = torchvision.datasets.CelebA(
+            root=opt.data_root, split=split, target_type="attr", download=True)
         self.list_attributes = [18, 31, 21]
         self.transforms = transforms
         self.split = split
@@ -107,9 +107,11 @@ def get_dataloader(opt, train=True, shuffle=True):
     if opt.dataset == "gtsrb":
         dataset = GTSRB(opt, train, transform)
     elif opt.dataset == "mnist":
-        dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
+        dataset = torchvision.datasets.MNIST(
+            opt.data_root, train, transform, download=True)
     elif opt.dataset == "cifar10":
-        dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+        dataset = torchvision.datasets.CIFAR10(
+            opt.data_root, train, transform, download=True)
     elif opt.dataset == "celeba":
         if train:
             split = "train"
@@ -118,13 +120,15 @@ def get_dataloader(opt, train=True, shuffle=True):
         dataset = CelebA_attr(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True
+    )
     return dataloader
 
 
 def main():
     opt = config.get_arguments().parse_args()
-    transforms = get_transform(opt, False)
+    get_transform(opt, False)
     dataloader = get_dataloader(opt, False)
     for item in dataloader:
         images, labels = item

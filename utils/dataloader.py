@@ -1,17 +1,11 @@
-import csv
 import os
 import random
-
-import config
 
 import kornia.augmentation as A
 import torch
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
-from PIL import Image
-import glob
-from torch.utils.tensorboard import SummaryWriter
 
 
 class ProbTransform(torch.nn.Module):
@@ -29,18 +23,23 @@ class ProbTransform(torch.nn.Module):
 
 def get_transform(opt, train=True, pretensor_transform=False):
     transforms_list = []
-    transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
-    
+    transforms_list.append(transforms.Resize(
+        (opt.input_height, opt.input_width)))
+
     if pretensor_transform:
         if train:
-            transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop))
-            transforms_list.append(transforms.RandomRotation(opt.random_rotation))
+            transforms_list.append(transforms.RandomCrop(
+                (opt.input_height, opt.input_width), padding=opt.random_crop))
+            transforms_list.append(
+                transforms.RandomRotation(opt.random_rotation))
             if opt.dataset == "cifar10":
                 transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
 
     transforms_list.append(transforms.ToTensor())
     if opt.dataset in ["cifar10", "celeba", "imagenet10"]:
-        transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
+        transforms_list.append(
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        )  # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
     else:
         raise Exception("Invalid Dataset")
     return transforms.Compose(transforms_list)
@@ -51,8 +50,11 @@ class PostTensorTransform(torch.nn.Module):
         super(PostTensorTransform, self).__init__()
         if opt.post_transform_option != "no_use":
             if not (opt.post_transform_option == "use_modified"):
-                self.random_crop = ProbTransform(A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8)
-            self.random_rotation = ProbTransform(A.RandomRotation(opt.random_rotation), p=0.5)
+                self.random_crop = ProbTransform(
+                    A.RandomCrop((opt.input_height, opt.input_width), padding=opt.random_crop), p=0.8
+                )
+            self.random_rotation = ProbTransform(
+                A.RandomRotation(opt.random_rotation), p=0.5)
             if opt.dataset == "cifar10":
                 self.random_horizontal_flip = A.RandomHorizontalFlip(p=0.5)
 
@@ -62,10 +64,10 @@ class PostTensorTransform(torch.nn.Module):
         return x
 
 
-
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
+        self.dataset = torchvision.datasets.CelebA(
+            root=opt.data_root, split=split, target_type="attr", download=True)
         self.list_attributes = [18, 31, 21]
         self.transforms = transforms
         self.split = split
@@ -85,7 +87,8 @@ class CelebA_attr(data.Dataset):
 
 class ImageNet(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.dataset = torchvision.datasets.ImageNet(
+            root=os.path.join(opt.data_root, "imagenet10"), split=split)
         self.transforms = transforms
         self.split = split
 
@@ -96,31 +99,37 @@ class ImageNet(data.Dataset):
         input, target = self.dataset[index]
         input = self.transforms(input)
         return (input, target)
-    
+
 
 def get_dataloader(opt, train=True, pretensor_transform=False, target_label=None, bs=None, shuffle=True):
     if bs is None:
         bs = opt.bs
     transform = get_transform(opt, train, pretensor_transform)
     if opt.dataset == "cifar10":
-        dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+        dataset = torchvision.datasets.CIFAR10(
+            opt.data_root, train, transform, download=True)
         if target_label is not None:
-            pairs = [(x, y) for x, y in zip(dataset.data, dataset.targets) if int(y) == target_label]
-            dataset.data, dataset.targets = [x[0] for x in pairs], [x[1] for x in pairs]
+            pairs = [(x, y) for x, y in zip(dataset.data,
+                                            dataset.targets) if int(y) == target_label]
+            dataset.data, dataset.targets = [x[0]
+                                             for x in pairs], [x[1] for x in pairs]
     elif opt.dataset == "celeba":
         if train:
             split = "train"
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
-    elif opt.dataset == 'imagenet10':
-        split = 'train' if train else 'val'
+    elif opt.dataset == "imagenet10":
+        split = "train" if train else "val"
         dataset = ImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
     if opt.debug:
-        dataset = torch.utils.data.Subset(dataset, range(min(len(dataset), 1000)))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True)
+        dataset = torch.utils.data.Subset(
+            dataset, range(min(len(dataset), 1000)))
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=bs, num_workers=opt.num_workers, shuffle=shuffle, pin_memory=True
+    )
     return dataloader
 
 

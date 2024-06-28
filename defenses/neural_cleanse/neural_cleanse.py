@@ -3,7 +3,6 @@ import sys
 import numpy as np
 from detecting import *
 
-from config import get_argument
 
 sys.path.insert(0, "../..")
 
@@ -25,11 +24,17 @@ def outlier_detection(l1_norm_list, idx_mapping, opt):
         print("This is a backdoor model")
 
     if opt.to_file:
-        result_path = os.path.join(opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
-        output_path = os.path.join(result_path, "{}_{}_output.txt".format(opt.dataset, opt.saving_prefix))
+        result_path = os.path.join(
+            opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
+        output_path = os.path.join(
+            result_path, "{}_{}_output.txt".format(opt.dataset, opt.saving_prefix))
         with open(output_path, "a+") as f:
-            f.write(str(median.cpu().numpy()) + ", " + str(mad.cpu().numpy()) + ", " + str(min_mad.cpu().numpy()) + "\n")
-            l1_norm_list_to_save = [str(value) for value in l1_norm_list.cpu().numpy()]
+            f.write(
+                str(median.cpu().numpy()) + ", " + str(mad.cpu().numpy()) +
+                ", " + str(min_mad.cpu().numpy()) + "\n"
+            )
+            l1_norm_list_to_save = [str(value)
+                                    for value in l1_norm_list.cpu().numpy()]
             f.write(", ".join(l1_norm_list_to_save) + "\n")
 
     flag_list = []
@@ -42,7 +47,10 @@ def outlier_detection(l1_norm_list, idx_mapping, opt):
     if len(flag_list) > 0:
         flag_list = sorted(flag_list, key=lambda x: x[1])
 
-    print("Flagged label list: {}".format(",".join(["{}: {}".format(y_label, l_norm) for y_label, l_norm in flag_list])))
+    print(
+        "Flagged label list: {}".format(
+            ",".join(["{}: {}".format(y_label, l_norm) for y_label, l_norm in flag_list]))
+    )
 
 
 def main():
@@ -73,19 +81,24 @@ def main():
     else:
         raise Exception("Invalid Dataset")
 
-    result_path = os.path.join(opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
+    result_path = os.path.join(
+        opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
     if not os.path.exists(result_path):
         os.makedirs(result_path)
-    output_path = os.path.join(result_path, "{}_{}_output.txt".format(opt.dataset, opt.saving_prefix))
+    output_path = os.path.join(
+        result_path, "{}_{}_output.txt".format(opt.dataset, opt.saving_prefix))
     if opt.to_file:
         with open(output_path, "w+") as f:
-            f.write("Output for neural cleanse: {} - {}".format(opt.dataset, opt.saving_prefix) + "\n")
+            f.write("Output for neural cleanse: {} - {}".format(opt.dataset,
+                    opt.saving_prefix) + "\n")
 
     # init_mask = np.random.randn(1, opt.input_height, opt.input_width).astype(np.float32)
     # init_pattern = np.random.randn(opt.input_channel, opt.input_height, opt.input_width).astype(np.float32)
 
-    init_mask = np.ones((1, opt.input_height, opt.input_width)).astype(np.float32)
-    init_pattern = np.ones((opt.input_channel, opt.input_height, opt.input_width)).astype(np.float32)
+    init_mask = np.ones(
+        (1, opt.input_height, opt.input_width)).astype(np.float32)
+    init_pattern = np.ones(
+        (opt.input_channel, opt.input_height, opt.input_width)).astype(np.float32)
 
     for test in range(opt.n_times_test):
         print("Test {}:".format(test))
@@ -98,7 +111,8 @@ def main():
         idx_mapping = {}
 
         for target_label in range(opt.total_label):
-            print("----------------- Analyzing label: {} -----------------".format(target_label))
+            print(
+                "----------------- Analyzing label: {} -----------------".format(target_label))
             opt.target_label = target_label
             recorder, opt = train(opt, init_mask, init_pattern)
 

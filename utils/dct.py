@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn as nn
 
 
 def dct_fft_impl(v):
@@ -28,13 +27,14 @@ def dct(x, norm="ortho"):
 
     Vc = dct_fft_impl(v)
 
-    k = - torch.arange(N, dtype=x.dtype, device=x.device)[None, :] * np.pi / (2 * N)
+    k = -torch.arange(N, dtype=x.dtype,
+                      device=x.device)[None, :] * np.pi / (2 * N)
     W_r = torch.cos(k)
     W_i = torch.sin(k)
 
     V = Vc[:, :, 0] * W_r - Vc[:, :, 1] * W_i
 
-    if norm == 'ortho':
+    if norm == "ortho":
         V[:, 0] /= np.sqrt(N) * 2
         V[:, 1:] /= np.sqrt(N / 2) * 2
 
@@ -59,11 +59,12 @@ def idct(X, norm="ortho"):
 
     X_v = X.contiguous().view(-1, x_shape[-1]) / 2
 
-    if norm == 'ortho':
+    if norm == "ortho":
         X_v[:, 0] *= np.sqrt(N) * 2
         X_v[:, 1:] *= np.sqrt(N / 2) * 2
 
-    k = torch.arange(x_shape[-1], dtype=X.dtype, device=X.device)[None, :] * np.pi / (2 * N)
+    k = torch.arange(x_shape[-1], dtype=X.dtype,
+                     device=X.device)[None, :] * np.pi / (2 * N)
     W_r = torch.cos(k)
     W_i = torch.sin(k)
 
@@ -77,8 +78,8 @@ def idct(X, norm="ortho"):
 
     v = idct_irfft_impl(V)
     x = v.new_zeros(v.shape)
-    x[:, ::2] += v[:, :N - (N // 2)]
-    x[:, 1::2] += v.flip([1])[:, :N // 2]
+    x[:, ::2] += v[:, : N - (N // 2)]
+    x[:, 1::2] += v.flip([1])[:, : N // 2]
 
     return x.view(*x_shape)
 

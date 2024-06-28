@@ -3,7 +3,7 @@
 See the paper "Inverted Residuals and Linear Bottlenecks:
 Mobile Networks for Classification, Detection and Segmentation" for more details.
 """
-import torch
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -16,17 +16,21 @@ class Block(nn.Module):
         self.stride = stride
 
         planes = expansion * in_planes
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, groups=planes, bias=False)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
+                               stride=stride, padding=1, groups=planes, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv3 = nn.Conv2d(
+            planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes)
 
         self.shortcut = nn.Sequential()
         if stride == 1 and in_planes != out_planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
+                nn.Conv2d(in_planes, out_planes, kernel_size=1,
+                          stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_planes),
             )
 
@@ -43,17 +47,27 @@ input_size2scaler = {32: 1, 64: 4}
 
 class MobileNetV2(nn.Module):
     # (expansion, out_planes, num_blocks, stride)
-    cfg = [(1, 16, 1, 1), (6, 24, 2, 1), (6, 32, 3, 2), (6, 64, 4, 2), (6, 96, 3, 1), (6, 160, 3, 2), (6, 320, 1, 1)]  # NOTE: change stride 2 -> 1 for CIFAR10
+    cfg = [
+        (1, 16, 1, 1),
+        (6, 24, 2, 1),
+        (6, 32, 3, 2),
+        (6, 64, 4, 2),
+        (6, 96, 3, 1),
+        (6, 160, 3, 2),
+        (6, 320, 1, 1),
+    ]  # NOTE: change stride 2 -> 1 for CIFAR10
 
     def __init__(self, num_classes=10, n_input=3, input_size=32):
         super(MobileNetV2, self).__init__()
         scaler = input_size2scaler[input_size]
 
         # NOTE: change conv1 stride 2 -> 1 for CIFAR10
-        self.conv1 = nn.Conv2d(n_input, 32, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(n_input, 32, kernel_size=3,
+                               stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.layers = self._make_layers(in_planes=32)
-        self.conv2 = nn.Conv2d(320, 1280, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv2 = nn.Conv2d(320, 1280, kernel_size=1,
+                               stride=1, padding=0, bias=False)
         self.bn2 = nn.BatchNorm2d(1280)
         self.linear = nn.Linear(1280 * scaler, num_classes)
 

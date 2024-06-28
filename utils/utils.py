@@ -3,8 +3,7 @@
     - msr_init: net parameter initialization.
     - progress_bar: progress bar mimic xlua.progress.
 """
-import math
-import os
+
 import sys
 import time
 
@@ -15,7 +14,8 @@ import torch.nn.init as init
 
 def get_mean_and_std(dataset):
     """Compute the mean and std value of dataset."""
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=2)
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=1, shuffle=True, num_workers=2)
     mean = torch.zeros(3)
     std = torch.zeros(3)
     print("==> Computing mean and std..")
@@ -70,9 +70,9 @@ def progress_bar(current, total, msg=None):
     sys.stdout.write("]")
 
     cur_time = time.time()
-    step_time = cur_time - last_time
+    cur_time - last_time
     last_time = cur_time
-    tot_time = cur_time - begin_time
+    cur_time - begin_time
 
     L = []
     if msg:

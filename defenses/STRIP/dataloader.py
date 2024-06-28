@@ -1,14 +1,11 @@
-import csv
 import os
 
+import config
 import numpy as np
 import torch
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
-from PIL import Image
-
-import config
 
 
 class ToNumpy:
@@ -21,21 +18,26 @@ class ToNumpy:
 
 def get_transform(opt, train=True):
     transforms_list = []
-    transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
+    transforms_list.append(transforms.Resize(
+        (opt.input_height, opt.input_width)))
     if train:
-        transforms_list.append(transforms.RandomCrop((opt.input_height, opt.input_width), padding=opt.input_height // 8))
+        transforms_list.append(
+            transforms.RandomCrop(
+                (opt.input_height, opt.input_width), padding=opt.input_height // 8)
+        )
         transforms_list.append(transforms.RandomRotation(10))
         transforms_list.append(transforms.RandomHorizontalFlip(p=0.5))
     transforms_list.append(transforms.ToTensor())
-    transforms_list.append(transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))
+    transforms_list.append(transforms.Normalize(
+        [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]))
 
     return transforms.Compose(transforms_list)
 
 
-
 class CelebA_attr(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.CelebA(root=opt.data_root, split=split, target_type="attr", download=True)
+        self.dataset = torchvision.datasets.CelebA(
+            root=opt.data_root, split=split, target_type="attr", download=True)
         self.list_attributes = [18, 31, 21]
         self.transforms = transforms
         self.split = split
@@ -55,7 +57,8 @@ class CelebA_attr(data.Dataset):
 
 class ImageNet(data.Dataset):
     def __init__(self, opt, split, transforms):
-        self.dataset = torchvision.datasets.ImageNet(root=os.path.join(opt.data_root, "imagenet10"), split=split)
+        self.dataset = torchvision.datasets.ImageNet(
+            root=os.path.join(opt.data_root, "imagenet10"), split=split)
         self.transforms = transforms
         self.split = split
 
@@ -71,35 +74,48 @@ class ImageNet(data.Dataset):
 def get_dataloader(opt, train=True):
     transform = get_transform(opt, train)
     if opt.dataset == "cifar10":
-        dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+        dataset = torchvision.datasets.CIFAR10(
+            opt.data_root, train, transform, download=True)
     elif opt.dataset == "celeba":
         if train:
             split = "train"
         else:
             split = "test"
         dataset = CelebA_attr(opt, split, transform)
-    elif opt.dataset == 'imagenet10':
-        split = 'train' if train else 'val'
+    elif opt.dataset == "imagenet10":
+        split = "train" if train else "val"
         dataset = ImageNet(opt, split, transform)
     else:
         raise Exception("Invalid dataset")
-    
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=True)
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=opt.bs, num_workers=opt.num_workers, shuffle=True)
     return dataloader
 
 
 def get_dataset(opt, train=True):
     if opt.dataset == "cifar10":
-        dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform=ToNumpy(), download=True)
+        dataset = torchvision.datasets.CIFAR10(
+            opt.data_root, train, transform=ToNumpy(), download=True)
     elif opt.dataset == "celeba":
         if train:
             split = "train"
         else:
             split = "test"
-        dataset = CelebA_attr(opt, split, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
-    elif opt.dataset == 'imagenet10':
-        split = 'train' if train else 'val'
-        dataset = ImageNet(opt, split, transforms=transforms.Compose([transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]))
+        dataset = CelebA_attr(
+            opt,
+            split,
+            transforms=transforms.Compose(
+                [transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]),
+        )
+    elif opt.dataset == "imagenet10":
+        split = "train" if train else "val"
+        dataset = ImageNet(
+            opt,
+            split,
+            transforms=transforms.Compose(
+                [transforms.Resize((opt.input_height, opt.input_width)), ToNumpy()]),
+        )
     else:
         raise Exception("Invalid dataset")
     return dataset
@@ -107,7 +123,7 @@ def get_dataset(opt, train=True):
 
 def main():
     opt = config.get_arguments().parse_args()
-    transforms = get_transform(opt, False)
+    get_transform(opt, False)
     dataloader = get_dataloader(opt, False)
     for item in dataloader:
         images, labels = item

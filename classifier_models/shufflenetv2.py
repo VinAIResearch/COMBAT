@@ -2,6 +2,7 @@
 
 See the paper "ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design" for more details.
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -34,11 +35,15 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.split = SplitBlock(split_ratio)
         in_channels = int(in_channels * split_ratio)
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, in_channels,
+                               kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(in_channels)
-        self.conv2 = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1, groups=in_channels, bias=False)
+        self.conv2 = nn.Conv2d(
+            in_channels, in_channels, kernel_size=3, stride=1, padding=1, groups=in_channels, bias=False
+        )
         self.bn2 = nn.BatchNorm2d(in_channels)
-        self.conv3 = nn.Conv2d(in_channels, in_channels, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(in_channels, in_channels,
+                               kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(in_channels)
         self.shuffle = ShuffleBlock()
 
@@ -57,16 +62,23 @@ class DownBlock(nn.Module):
         super(DownBlock, self).__init__()
         mid_channels = out_channels // 2
         # left
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=1, groups=in_channels, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_channels, in_channels, kernel_size=3, stride=2, padding=1, groups=in_channels, bias=False
+        )
         self.bn1 = nn.BatchNorm2d(in_channels)
-        self.conv2 = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv2d(in_channels, mid_channels,
+                               kernel_size=1, bias=False)
         self.bn2 = nn.BatchNorm2d(mid_channels)
         # right
-        self.conv3 = nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False)
+        self.conv3 = nn.Conv2d(in_channels, mid_channels,
+                               kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(mid_channels)
-        self.conv4 = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=2, padding=1, groups=mid_channels, bias=False)
+        self.conv4 = nn.Conv2d(
+            mid_channels, mid_channels, kernel_size=3, stride=2, padding=1, groups=mid_channels, bias=False
+        )
         self.bn4 = nn.BatchNorm2d(mid_channels)
-        self.conv5 = nn.Conv2d(mid_channels, mid_channels, kernel_size=1, bias=False)
+        self.conv5 = nn.Conv2d(mid_channels, mid_channels,
+                               kernel_size=1, bias=False)
         self.bn5 = nn.BatchNorm2d(mid_channels)
 
         self.shuffle = ShuffleBlock()
@@ -91,13 +103,15 @@ class ShuffleNetV2(nn.Module):
         out_channels = configs[net_size]["out_channels"]
         num_blocks = configs[net_size]["num_blocks"]
 
-        self.conv1 = nn.Conv2d(3, 24, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3, 24, kernel_size=3,
+                               stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(24)
         self.in_channels = 24
         self.layer1 = self._make_layer(out_channels[0], num_blocks[0])
         self.layer2 = self._make_layer(out_channels[1], num_blocks[1])
         self.layer3 = self._make_layer(out_channels[2], num_blocks[2])
-        self.conv2 = nn.Conv2d(out_channels[2], out_channels[3], kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv2 = nn.Conv2d(
+            out_channels[2], out_channels[3], kernel_size=1, stride=1, padding=0, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels[3])
         self.linear = nn.Linear(out_channels[3], 10)
 
@@ -121,7 +135,12 @@ class ShuffleNetV2(nn.Module):
         return out
 
 
-configs = {0.5: {"out_channels": (48, 96, 192, 1024), "num_blocks": (3, 7, 3)}, 1: {"out_channels": (116, 232, 464, 1024), "num_blocks": (3, 7, 3)}, 1.5: {"out_channels": (176, 352, 704, 1024), "num_blocks": (3, 7, 3)}, 2: {"out_channels": (224, 488, 976, 2048), "num_blocks": (3, 7, 3)}}
+configs = {
+    0.5: {"out_channels": (48, 96, 192, 1024), "num_blocks": (3, 7, 3)},
+    1: {"out_channels": (116, 232, 464, 1024), "num_blocks": (3, 7, 3)},
+    1.5: {"out_channels": (176, 352, 704, 1024), "num_blocks": (3, 7, 3)},
+    2: {"out_channels": (224, 488, 976, 2048), "num_blocks": (3, 7, 3)},
+}
 
 
 def test():

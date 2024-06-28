@@ -2,41 +2,20 @@ import os
 import shutil
 from functools import partial
 
+import config
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torchvision.transforms as T
 import torchvision
-import torchvision.transforms.functional as fn
-from torch import nn
+import torchvision.transforms as T
+from classifier_models import VGG, DenseNet121, MobileNetV2, PreActResNet18, ResNet18
+from defenses.frequency_based.model import FrequencyModel, FrequencyModelDropout, FrequencyModelDropoutEnsemble
+from networks.models import Denormalizer, UnetGenerator
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import RandomErasing
-import timm
-from vit_pytorch import SimpleViT
-
-import config
-from classifier_models import (
-    VGG,
-    DenseNet121,
-    MobileNetV2,
-    PreActResNet10,
-    PreActResNet18,
-    ResNet18,
-)
-from defenses.frequency_based.model import (
-    FrequencyModel,
-    FrequencyModelDropout,
-    FrequencyModelDropoutEnsemble,
-)
-from networks.models import (
-    AE,
-    Denormalizer,
-    Normalizer,
-    UnetGenerator,
-)
 from utils.dataloader import PostTensorTransform, get_dataloader
-from utils.utils import progress_bar
 from utils.dct import *
+from utils.utils import progress_bar
+from vit_pytorch import SimpleViT
 
 
 class ViT(SimpleViT):
@@ -69,10 +48,10 @@ def low_freq(x, opt):
     image_size = opt.input_height
     ratio = opt.ratio
     mask = torch.zeros_like(x)
-    mask[:, :, :int(image_size * ratio), :int(image_size * ratio)] = 1
-    x_dct = dct_2d((x+1)/2*255)
+    mask[:, :, : int(image_size * ratio), : int(image_size * ratio)] = 1
+    x_dct = dct_2d((x + 1) / 2 * 255)
     x_dct *= mask
-    x_idct = (idct_2d(x_dct)/255*2) - 1
+    x_idct = (idct_2d(x_dct) / 255 * 2) - 1
     return x_idct
 
 
@@ -92,9 +71,11 @@ def create_targets_bd(targets, opt):
     if opt.attack_mode == "all2one":
         bd_targets = torch.ones_like(targets) * opt.target_label
     elif opt.attack_mode == "all2all":
-        bd_targets = torch.tensor([(label + 1) % opt.num_classes for label in targets])
+        bd_targets = torch.tensor(
+            [(label + 1) % opt.num_classes for label in targets])
     else:
-        raise Exception("{} attack mode is not implemented".format(opt.attack_mode))
+        raise Exception(
+            "{} attack mode is not implemented".format(opt.attack_mode))
     return bd_targets.to(opt.device)
 
 
@@ -116,27 +97,42 @@ def get_model(opt):
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
         clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
-    elif opt.dataset == 'imagenet10':
-        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
-        clean_model = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
+    elif opt.dataset == "imagenet10":
+        netC = ResNet18(num_classes=opt.num_classes,
+                        input_size=opt.input_height).to(opt.device)
+        clean_model = ResNet18(num_classes=opt.num_classes,
+                               input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
     if opt.model != "default":
-        netC = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        netC = C_MAPPING_NAMES[opt.model](
+            num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height
+        ).to(opt.device)
     if opt.model_clean != "default":
-        clean_model = C_MAPPING_NAMES[opt.model](num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        clean_model = C_MAPPING_NAMES[opt.model](
+            num_classes=opt.num_classes, n_input=opt.input_channel, input_size=opt.input_height
+        ).to(opt.device)
 
     # Frequency Detector
-    F_MAPPING_NAMES["original_dropout"] = partial(FrequencyModelDropout, dropout=opt.F_dropout)
-    F_MAPPING_NAMES["original_dropout_ensemble"] = partial(FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble)
+    F_MAPPING_NAMES["original_dropout"] = partial(
+        FrequencyModelDropout, dropout=opt.F_dropout)
+    F_MAPPING_NAMES["original_dropout_ensemble"] = partial(
+        FrequencyModelDropoutEnsemble, dropout=opt.F_dropout, num_ensemble=opt.F_num_ensemble
+    )
 
-    netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+    netF = F_MAPPING_NAMES[opt.F_model](num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(
+        opt.device
+    )
 
     # Optimizer
-    optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
-    optimizerG = torch.optim.SGD(netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
+    optimizerC = torch.optim.SGD(
+        netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    schedulerC = torch.optim.lr_scheduler.MultiStepLR(
+        optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
+    optimizerG = torch.optim.SGD(
+        netG.parameters(), opt.lr_G, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    schedulerG = torch.optim.lr_scheduler.MultiStepLR(
+        optimizerG, opt.schedulerG_milestones, opt.schedulerG_lambda)
 
     return netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model
 
@@ -173,7 +169,7 @@ def train(
     total_clean_model_bd_ba = 0
     total_clean_model_bd_asr = 0
     criterion_CE = torch.nn.CrossEntropyLoss()
-    criterion_BCE = torch.nn.BCELoss()
+    torch.nn.BCELoss()
     criterion_L2 = torch.nn.MSELoss()
     gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
 
@@ -185,14 +181,16 @@ def train(
         bs = inputs.shape[0]
         bd_targets = create_targets_bd(targets, opt)
 
-        ### Train C
+        # Train C
         netG.eval()
         clean_model.eval()
         netC.train()
         optimizerC.zero_grad()
         # Create backdoor data
-        trg_ind = (targets == bd_targets).nonzero()[:, 0]  # Target-label image indices
-        ntrg_ind = (targets != bd_targets).nonzero()[:, 0]  # Nontarget-label image indices
+        trg_ind = (targets == bd_targets).nonzero()[
+            :, 0]  # Target-label image indices
+        ntrg_ind = (targets != bd_targets).nonzero()[
+            :, 0]  # Nontarget-label image indices
         num_bd = np.sum(np.random.rand(trg_ind.shape[0]) < rate_bd)
         # num_bd = int(trg_ind.shape[0] * rate_bd)
         # print(epoch, trg_ind.shape[0], num_bd)
@@ -202,10 +200,12 @@ def train(
         noise_bd = netG(inputs_toChange)
         if inputs_toChange.shape[0] != 0:
             noise_bd = low_freq(noise_bd, opt)
-        inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+        inputs_bd = torch.clamp(
+            inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
         if inputs_bd.shape[0] != 0:
             inputs_bd = gauss_smooth(inputs_bd)
-        total_inputs = torch.cat([inputs_bd, inputs[trg_ind[num_bd:]], inputs[ntrg_ind]], dim=0)
+        total_inputs = torch.cat(
+            [inputs_bd, inputs[trg_ind[num_bd:]], inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
         total_targets = torch.cat(
             [
@@ -224,10 +224,9 @@ def train(
         loss.backward()
         optimizerC.step()
 
-
         clean_preds = clean_model(transforms(inputs))
 
-        ### Train G
+        # Train G
         netC.eval()
         clean_model.eval()
         netG.train()
@@ -264,9 +263,8 @@ def train(
         clean_model_preds = clean_model(transforms(inputs_bd))
         clean_model_loss = criterion_CE(clean_model_preds, targets)
 
-        loss = (
-            loss_ce + opt.L2_weight * loss_l2 + opt.clean_model_weight * clean_model_loss
-        )  # + loss_grad_l2
+        loss = loss_ce + opt.L2_weight * loss_l2 + \
+            opt.clean_model_weight * clean_model_loss  # + loss_grad_l2
         loss.backward()
         optimizerG.step()
 
@@ -275,12 +273,17 @@ def train(
         total_loss_l2 += loss_l2.detach()
         total_loss_grad_l2 += loss_grad_l2.detach()
         total_clean_model_loss += clean_model_loss.detach()
-        total_clean_correct += torch.sum(torch.argmax(pred_clean, dim=1) == targets)
-        total_bd_correct += torch.sum(torch.argmax(pred_bd, dim=1) == bd_targets)
+        total_clean_correct += torch.sum(
+            torch.argmax(pred_clean, dim=1) == targets)
+        total_bd_correct += torch.sum(torch.argmax(pred_bd,
+                                      dim=1) == bd_targets)
         total_F_correct += torch.sum(torch.argmax(pred_F, dim=1) == F_targets)
-        total_clean_model_correct += torch.sum(torch.argmax(clean_preds, dim=1) == targets)
-        total_clean_model_bd_ba += torch.sum(torch.argmax(clean_model_preds, dim=1) == targets)
-        total_clean_model_bd_asr += torch.sum(torch.argmax(clean_model_preds, dim=1) == bd_targets)
+        total_clean_model_correct += torch.sum(
+            torch.argmax(clean_preds, dim=1) == targets)
+        total_clean_model_bd_ba += torch.sum(
+            torch.argmax(clean_model_preds, dim=1) == targets)
+        total_clean_model_bd_asr += torch.sum(
+            torch.argmax(clean_model_preds, dim=1) == bd_targets)
 
         avg_acc_clean = total_clean_correct * 100.0 / total_sample
         avg_acc_bd = total_bd_correct * 100.0 / total_sample
@@ -288,7 +291,7 @@ def train(
         avg_clean_model_acc = total_clean_model_correct * 100.0 / total_sample
         avg_clean_model_bd_ba = total_clean_model_bd_ba * 100.0 / total_sample
         avg_clean_model_bd_asr = total_clean_model_bd_asr * 100.0 / total_sample
-        avg_loss_ce = total_loss_ce / total_sample
+        total_loss_ce / total_sample
         avg_loss_l2 = total_loss_l2 / total_sample
         avg_loss_grad_l2 = total_loss_grad_l2 / total_sample
         avg_clean_model_loss = total_clean_model_loss / total_sample
@@ -376,7 +379,8 @@ def eval(
             preds_clean = netC(inputs)
 
             total_clean_sample += len(inputs)
-            total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
+            total_clean_correct += torch.sum(
+                torch.argmax(preds_clean, 1) == targets)
 
             # Evaluate Backdoor
             ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
@@ -384,14 +388,16 @@ def eval(
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
             noise_bd = low_freq(noise_bd, opt)
-            
-            inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
+
+            inputs_bd = torch.clamp(
+                inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
             inputs_bd = gauss_smooth(inputs_bd)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1)
+                                          == targets_bd)
 
             # Evaluate against Frequency Defense
             inputs_F = dct_2d(((inputs_bd + 1) / 2 * 255).byte())
@@ -401,10 +407,13 @@ def eval(
 
             # Evaluate against Clean Model
             clean_model_preds_clean = clean_model(inputs)
-            total_clean_model_correct += torch.sum(torch.argmax(clean_model_preds_clean, 1) == targets)
+            total_clean_model_correct += torch.sum(
+                torch.argmax(clean_model_preds_clean, 1) == targets)
             clean_model_preds_bd = clean_model(inputs_bd)
-            total_clean_model_bd_ba += torch.sum(torch.argmax(clean_model_preds_bd, 1) == targets_toChange)
-            total_clean_model_bd_asr += torch.sum(torch.argmax(clean_model_preds_bd, 1) == targets_bd)
+            total_clean_model_bd_ba += torch.sum(torch.argmax(
+                clean_model_preds_bd, 1) == targets_toChange)
+            total_clean_model_bd_asr += torch.sum(
+                torch.argmax(clean_model_preds_bd, 1) == targets_bd)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
             acc_bd = total_bd_correct * 100.0 / total_bd_sample
@@ -493,7 +502,7 @@ def main():
         opt.input_channel = 3
         opt.num_workers = 40
         opt.num_classes = 8
-    elif opt.dataset == 'imagenet10':
+    elif opt.dataset == "imagenet10":
         opt.input_height = 224
         opt.input_width = 224
         opt.input_channel = 3
@@ -507,27 +516,37 @@ def main():
     test_dl = get_dataloader(opt, False)
 
     # prepare model
-    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model = get_model(opt)
+    netC, optimizerC, schedulerC, netG, optimizerG, schedulerG, netF, clean_model = get_model(
+        opt)
 
     # Load pretrained model
     mode = opt.saving_prefix
-    opt.ckpt_folder = os.path.join(opt.checkpoints, "{}_clean".format(mode), opt.dataset)
-    opt.ckpt_path = os.path.join(opt.ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
+    opt.ckpt_folder = os.path.join(
+        opt.checkpoints, "{}_clean".format(mode), opt.dataset)
+    opt.ckpt_path = os.path.join(
+        opt.ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     create_dir(opt.log_dir)
 
     # Load pretrained FrequencyModel
     opt.F_ckpt_folder = os.path.join(opt.F_checkpoints, opt.dataset)
-    opt.F_ckpt_path = os.path.join(opt.F_ckpt_folder, opt.F_model, "{}_{}_detector.pth.tar".format(opt.dataset, opt.F_model))
+    opt.F_ckpt_path = os.path.join(
+        opt.F_ckpt_folder, opt.F_model, "{}_{}_detector.pth.tar".format(
+            opt.dataset, opt.F_model)
+    )
     print(f"Loading {opt.F_model} at {opt.F_ckpt_path}")
     state_dict_F = torch.load(opt.F_ckpt_path)
     netF.load_state_dict(state_dict_F["netC"])
     netF.eval()
     print("Done")
 
-
     # Load clean_model
-    load_path = os.path.join(opt.checkpoints, opt.load_checkpoint_clean, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint_clean))
+    load_path = os.path.join(
+        opt.checkpoints,
+        opt.load_checkpoint_clean,
+        opt.dataset,
+        "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint_clean),
+    )
     if not os.path.exists(load_path):
         print("Error: {} not found".format(load_path))
         exit()
@@ -553,7 +572,7 @@ def main():
             best_F_acc = state_dict["best_F_acc"]
             best_clean_model_acc = state_dict["best_clean_model_acc"]
             best_clean_model_bd_ba = state_dict["best_clean_model_bd_ba"]
-            best_clean_model_bd_asr= state_dict["best_clean_model_bd_asr"]
+            best_clean_model_bd_asr = state_dict["best_clean_model_bd_asr"]
             epoch_current = state_dict["epoch_current"]
 
             tf_writer = SummaryWriter(log_dir=opt.log_dir)
@@ -590,7 +609,14 @@ def main():
             epoch,
             opt,
         )
-        (best_clean_acc, best_bd_acc, best_F_acc, best_clean_model_acc, best_clean_model_bd_ba, best_clean_model_bd_asr) = eval(
+        (
+            best_clean_acc,
+            best_bd_acc,
+            best_F_acc,
+            best_clean_model_acc,
+            best_clean_model_bd_ba,
+            best_clean_model_bd_asr,
+        ) = eval(
             netC,
             optimizerC,
             schedulerC,
@@ -610,6 +636,7 @@ def main():
             epoch,
             opt,
         )
+
 
 if __name__ == "__main__":
     main()

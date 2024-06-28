@@ -5,14 +5,16 @@ def get_argument():
     parser = argparse.ArgumentParser()
 
     # Directory option
-    parser.add_argument("--checkpoints", type=str, default="../../checkpoints/")
+    parser.add_argument("--checkpoints", type=str,
+                        default="../../checkpoints/")
     parser.add_argument("--data_root", type=str, default="../../data/")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--result", type=str, default="./results")
     parser.add_argument("--dataset", type=str, default="cifar10")
     parser.add_argument("--attack_mode", type=str, default="all2one")
     parser.add_argument("--temps", type=str, default="./temps")
-    parser.add_argument("--saving_prefix", type=str, help="Folder in /checkpoints for saving ckpt")
+    parser.add_argument("--saving_prefix", type=str,
+                        help="Folder in /checkpoints for saving ckpt")
 
     # ---------------------------- For Neural Cleanse --------------------------
     # Model hyperparameters
@@ -40,12 +42,17 @@ def get_argument():
 
     parser.add_argument("--scale", type=float, default=1)
     parser.add_argument("--S2", type=int, default=8)  # low-res grid size
-    parser.add_argument("--grid-rescale", type=float, default=1)  # scale grid values to avoid going out of [-1, 1]. For example, grid-rescale = 0.98
-    parser.add_argument("--clamp", action="store_true")  # clamp grid values to [-1, 1]
-    parser.add_argument("--nearest", type=int, default=0)  # control grid round-up precision
+    parser.add_argument(
+        "--grid-rescale", type=float, default=1
+    )  # scale grid values to avoid going out of [-1, 1]. For example, grid-rescale = 0.98
+    # clamp grid values to [-1, 1]
+    parser.add_argument("--clamp", action="store_true")
+    # control grid round-up precision
+    parser.add_argument("--nearest", type=int, default=0)
     #     0: No round-up, just use interpolated input values   (smooth, blur)
     #     1: Round-up to pixel precision                       (sharp, noisy)
     #     2: Round-up to 1/2 pixel precision                   (moderate)
 
-    parser.add_argument("--lnoise", type=int, default=8)  # Length of the input noise vector in dynamic mode
+    # Length of the input noise vector in dynamic mode
+    parser.add_argument("--lnoise", type=int, default=8)
     return parser

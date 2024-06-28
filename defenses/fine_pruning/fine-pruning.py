@@ -1,5 +1,5 @@
 from utils.utils import progress_bar
-from utils.dct import *
+from utils.dct import dct_2d, idct_2d
 from utils.dataloader import get_dataloader
 from networks.models import UnetGenerator
 from classifier_models import PreActResNet18, ResNet18
@@ -46,7 +46,7 @@ def convert(mask):
         for j in range(mask_len):
             try:
                 converted_mask[4 * j + i] = mask[j]
-            except:
+            except IOError:
                 print(i, j)
                 input()
     return converted_mask

@@ -1,9 +1,3 @@
-from utils.dct import *
-from utils.dataloader import get_dataloader
-from torch.autograd import Function
-from PIL import Image, ImageDraw, ImageFont
-from networks.models import UnetGenerator
-from classifier_models import PreActResNet18
 import os
 import sys
 
@@ -12,7 +6,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
+from classifier_models import PreActResNet18
 from config import get_arguments
+from networks.models import UnetGenerator
+from PIL import Image, ImageDraw, ImageFont
+from torch.autograd import Function
+from utils.dataloader import get_dataloader
+from utils.dct import dct_2d, idct_2d
 
 
 sys.path.insert(0, "../..")
@@ -34,8 +34,7 @@ def text_phantom(text, size):
     font = "LiberationSans-Regular"
 
     # Create font
-    pil_font = ImageFont.truetype(
-        font + ".ttf", size=size // len(text), encoding="unic")
+    pil_font = ImageFont.truetype(font + ".ttf", size=size // len(text), encoding="unic")
     text_width, text_height = pil_font.getsize(text)
 
     # create a blank canvas with extra space between lines
@@ -61,8 +60,7 @@ class Normalize:
     def __call__(self, x):
         x_clone = x.clone()
         for channel in range(self.n_channels):
-            x_clone[:, channel] = (
-                x[:, channel] - self.expected_values[channel]) / self.variance[channel]
+            x_clone[:, channel] = (x[:, channel] - self.expected_values[channel]) / self.variance[channel]
         return x_clone
 
 
@@ -76,8 +74,7 @@ class Denormalize:
     def __call__(self, x):
         x_clone = x.clone()
         for channel in range(self.n_channels):
-            x_clone[:, channel] = x[:, channel] * \
-                self.variance[channel] + self.expected_values[channel]
+            x_clone[:, channel] = x[:, channel] * self.variance[channel] + self.expected_values[channel]
         return x_clone
 
 
@@ -129,8 +126,7 @@ class ModelOutputs:
     def __init__(self, model, feature_module, target_layers):
         self.model = model
         self.feature_module = feature_module
-        self.feature_extractor = FeatureExtractor(
-            self.feature_module, target_layers)
+        self.feature_extractor = FeatureExtractor(self.feature_module, target_layers)
 
     def get_gradients(self):
         return self.feature_extractor.gradients
@@ -158,8 +154,7 @@ class GradCam:
         if self.cuda:
             self.model = model.cuda()
 
-        self.extractor = ModelOutputs(
-            self.model, self.feature_module, target_layer_names)
+        self.extractor = ModelOutputs(self.model, self.feature_module, target_layer_names)
 
     def forward(self, input):
         return self.model(input)
@@ -170,7 +165,7 @@ class GradCam:
         else:
             features, output = self.extractor(input)
 
-        if index == None:
+        if index is None:
             index = np.argmax(output.cpu().data.numpy())
 
         one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
@@ -208,8 +203,7 @@ class GuidedBackpropReLU(Function):
     @staticmethod
     def forward(self, input):
         positive_mask = (input > 0).type_as(input)
-        output = torch.addcmul(torch.zeros(
-            input.size()).type_as(input), input, positive_mask)
+        output = torch.addcmul(torch.zeros(input.size()).type_as(input), input, positive_mask)
         self.save_for_backward(input, output)
         return output
 
@@ -222,8 +216,7 @@ class GuidedBackpropReLU(Function):
         positive_mask_2 = (grad_output > 0).type_as(grad_output)
         grad_input = torch.addcmul(
             torch.zeros(input.size()).type_as(input),
-            torch.addcmul(torch.zeros(input.size()).type_as(
-                input), grad_output, positive_mask_1),
+            torch.addcmul(torch.zeros(input.size()).type_as(input), grad_output, positive_mask_1),
             positive_mask_2,
         )
 
@@ -256,7 +249,7 @@ class GuidedBackpropReLUModel:
         else:
             output = self.forward(input)
 
-        if index == None:
+        if index is None:
             index = np.argmax(output.cpu().data.numpy())
         print(torch.argmax(output, 1))
 
@@ -335,17 +328,13 @@ def show_cam_on_image(img, mask, idx, result_path, opt, prefix=""):
     cam = cam / np.max(cam)
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(os.path.join(result_path, prefix +
-                "bd{}.png".format(idx)), np.uint8(img))
-    cv2.imwrite(os.path.join(result_path, prefix +
-                "cam{}.png".format(idx)), np.uint8(255 * cam))
+    cv2.imwrite(os.path.join(result_path, prefix + "bd{}.png".format(idx)), np.uint8(img))
+    cv2.imwrite(os.path.join(result_path, prefix + "cam{}.png".format(idx)), np.uint8(255 * cam))
     cv2.imwrite("heatmap.png", np.uint8(255 * heatmap))
     heatmap = heatmap[:, :, ::-1].copy()
 
-    heatmap, img = torch.tensor(heatmap).permute(
-        2, 0, 1), torch.tensor(img / 255.0).permute(2, 0, 1)
-    heatmap, img = F.interpolate(heatmap.unsqueeze(
-        0), scale_factor=4), F.interpolate(img.unsqueeze(0), scale_factor=4)
+    heatmap, img = torch.tensor(heatmap).permute(2, 0, 1), torch.tensor(img / 255.0).permute(2, 0, 1)
+    heatmap, img = F.interpolate(heatmap.unsqueeze(0), scale_factor=4), F.interpolate(img.unsqueeze(0), scale_factor=4)
     return heatmap[0], img[0]
 
 
@@ -355,8 +344,7 @@ def create_bd(inputs_clean, generator, opt):
     noise_bd = low_freq(noise_bd, opt)
     inputs_bd = torch.clamp(inputs_clean + noise_bd * opt.noise_rate, -1, 1)
     inputs_bd = gauss_smooth(inputs_bd)
-    targets_bd = torch.ones(inputs_clean.shape[0]).to(
-        opt.device) * opt.target_label
+    targets_bd = torch.ones(inputs_clean.shape[0]).to(opt.device) * opt.target_label
 
     return inputs_bd, targets_bd
 
@@ -386,8 +374,7 @@ if __name__ == "__main__":
     inputs_bd, _ = create_bd(inputs[:20], generator, opt)
     print(inputs_bd.shape)
 
-    grad_cam = GradCam(model=model, feature_module=model.layer3,
-                       target_layer_names=["1"], use_cuda=True)
+    grad_cam = GradCam(model=model, feature_module=model.layer3, target_layer_names=["1"], use_cuda=True)
     grad_cam_clean = GradCam(
         model=model_clean, feature_module=model_clean.layer3, target_layer_names=["1"], use_cuda=True
     )
@@ -439,5 +426,4 @@ if __name__ == "__main__":
         result_dir = os.path.join(opt.results, opt.dataset)
         if not os.path.exists(result_dir):
             os.makedirs(result_dir)
-        heatmap, img = show_cam_on_image(
-            img, mask, idx, result_dir, opt, prefix="clean")
+        heatmap, img = show_cam_on_image(img, mask, idx, result_dir, opt, prefix="clean")

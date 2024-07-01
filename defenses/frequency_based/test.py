@@ -1,8 +1,3 @@
-from utils.dct import *
-from utils.dataloader import get_dataloader
-from torchvision.models import efficientnet_b0, googlenet, squeezenet1_0
-from networks.models import UnetGenerator
-from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
 import os
 import sys
 
@@ -10,8 +5,13 @@ import config
 import numpy as np
 import torch
 import torchvision.transforms as T
+from classifier_models import VGG, DenseNet121, MobileNetV2, ResNet18
 from model import FrequencyModel
+from networks.models import UnetGenerator
 from scipy.fftpack import dct
+from torchvision.models import efficientnet_b0, googlenet, squeezenet1_0
+from utils.dataloader import get_dataloader
+from utils.dct import dct_2d, idct_2d
 
 
 sys.path.insert(0, "../..")
@@ -37,43 +37,29 @@ def get_model(opt):
     optimizerC = None
 
     if opt.model in ["original", "original_holdout"]:
-        netC = FrequencyModel(num_classes=2, n_input=opt.input_channel,
-                              input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adadelta(
-            netC.parameters(), lr=0.05, weight_decay=1e-4)
+        netC = FrequencyModel(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adadelta(netC.parameters(), lr=0.05, weight_decay=1e-4)
     if opt.model == "vgg13":
-        netC = VGG("VGG13", num_classes=2, n_input=opt.input_channel,
-                   input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        netC = VGG("VGG13", num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "densenet121":
-        netC = DenseNet121(num_classes=2, n_input=opt.input_channel,
-                           input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        netC = DenseNet121(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "mobilenetv2":
-        netC = MobileNetV2(num_classes=2, n_input=opt.input_channel,
-                           input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        netC = MobileNetV2(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "resnet18":
-        netC = ResNet18(num_classes=2, n_input=opt.input_channel,
-                        input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        netC = ResNet18(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "efficientnetb0":
-        netC = efficientnet_b0(num_classes=2, n_input=opt.input_channel,
-                               input_size=opt.input_height).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        netC = efficientnet_b0(num_classes=2, n_input=opt.input_channel, input_size=opt.input_height).to(opt.device)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "squeezenet":
         netC = squeezenet1_0(num_classes=2).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
     if opt.model == "googlenet":
         netC = googlenet(num_classes=2, aux_logits=False).to(opt.device)
-        optimizerC = torch.optim.Adam(
-            netC.parameters(), lr=0.02, weight_decay=1e-4)
+        optimizerC = torch.optim.Adam(netC.parameters(), lr=0.02, weight_decay=1e-4)
 
     return netC, optimizerC
 
@@ -98,8 +84,7 @@ def test(netC, netG, test_dl, opt):
             x_test = x.detach().cpu().numpy()
             poi_x_test = poi_x.detach().cpu().numpy()
             x_dct_test = np.vstack((x_test, poi_x_test))
-            y_dct_test = (
-                np.vstack((np.zeros((bs, 1)), np.ones((bs, 1))))).astype(int)
+            y_dct_test = (np.vstack((np.zeros((bs, 1)), np.ones((bs, 1))))).astype(int)
             for i in range(x_dct_test.shape[0]):
                 for channel in range(3):
                     x_dct_test[i][channel, :, :] = dct_2d(
@@ -107,24 +92,19 @@ def test(netC, netG, test_dl, opt):
                             np.uint8
                         )
                     )
-            x_final_test = torch.tensor(
-                x_dct_test, device=opt.device, dtype=torch.float)
-            y_final_test = torch.tensor(np.ndarray.flatten(
-                y_dct_test).astype(int).tolist(), device=opt.device)
+            x_final_test = torch.tensor(x_dct_test, device=opt.device, dtype=torch.float)
+            y_final_test = torch.tensor(np.ndarray.flatten(y_dct_test).astype(int).tolist(), device=opt.device)
             preds = netC(x_final_test)
 
-            detection += torch.sum(torch.argmax(
-                preds[bs:], dim=1) == y_final_test[bs:])
+            detection += torch.sum(torch.argmax(preds[bs:], dim=1) == y_final_test[bs:])
 
-            total_correct += torch.sum(torch.argmax(preds,
-                                       dim=1) == y_final_test)
+            total_correct += torch.sum(torch.argmax(preds, dim=1) == y_final_test)
             total_poi_sample += bs
             total_sample += x_final_test.shape[0]
 
     acc = total_correct * 100.0 / total_sample
     detection_rate = detection * 100.0 / total_poi_sample
-    info_string = "Acc: {:.4f} - Detection rate: {:.4f}".format(
-        acc, detection_rate)
+    info_string = "Acc: {:.4f} - Detection rate: {:.4f}".format(acc, detection_rate)
     print(info_string)
 
 
@@ -158,8 +138,7 @@ def main():
 
     # Load pretrained model
     opt.ckpt_folder = os.path.join(opt.checkpoints, opt.dataset, opt.model)
-    opt.ckpt_path = os.path.join(
-        opt.ckpt_folder, "{}_{}_detector.pth.tar".format(opt.dataset, opt.model))
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, "{}_{}_detector.pth.tar".format(opt.dataset, opt.model))
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     state_dict_C = torch.load(opt.ckpt_path)
     netC.load_state_dict(state_dict_C["netC"])

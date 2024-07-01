@@ -1,7 +1,3 @@
-from utils.utils import progress_bar
-from utils.dct import dct_2d, idct_2d
-from networks.models import Denormalizer, UnetGenerator
-from classifier_models import PreActResNet18, ResNet18
 import os
 import sys
 
@@ -10,8 +6,12 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
+from classifier_models import PreActResNet18, ResNet18
 from dataloader import get_dataloader, get_dataset
+from networks.models import Denormalizer, UnetGenerator
 from torchvision import transforms
+from utils.dct import dct_2d, idct_2d
+from utils.utils import progress_bar
 
 
 sys.path.insert(0, "../..")
@@ -27,8 +27,7 @@ class Normalize:
     def __call__(self, x):
         x_clone = x.clone()
         for channel in range(self.n_channels):
-            x_clone[:, :, channel] = (
-                x[:, :, channel] - self.expected_values[channel]) / self.variance[channel]
+            x_clone[:, :, channel] = (x[:, :, channel] - self.expected_values[channel]) / self.variance[channel]
         return x_clone
 
 
@@ -42,8 +41,7 @@ class Denormalize:
     def __call__(self, x):
         x_clone = x.clone()
         for channel in range(self.n_channels):
-            x_clone[:, :, channel] = x[:, :, channel] * \
-                self.variance[channel] + self.expected_values[channel]
+            x_clone[:, :, channel] = x[:, :, channel] * self.variance[channel] + self.expected_values[channel]
         return x_clone
 
 
@@ -70,8 +68,7 @@ class STRIP:
         x1_add = [0] * self.n_sample
         index_overlay = np.random.randint(0, len(dataset), size=self.n_sample)
         for index in range(self.n_sample):
-            add_image = self._superimpose(
-                background, dataset[index_overlay[index]][0])
+            add_image = self._superimpose(background, dataset[index_overlay[index]][0])
             add_image = self.normalize(add_image)
             x1_add[index] = add_image
 
@@ -136,10 +133,8 @@ def strip(opt, mode="clean"):
         netG.eval()
 
     # Load pretrained model
-    ckpt_folder = os.path.join(
-        opt.checkpoints, "{}_clean".format(opt.saving_prefix), opt.dataset)
-    ckpt_path = os.path.join(ckpt_folder, "{}_{}_clean.pth.tar".format(
-        opt.dataset, opt.saving_prefix))
+    ckpt_folder = os.path.join(opt.checkpoints, "{}_clean".format(opt.saving_prefix), opt.dataset)
+    ckpt_path = os.path.join(ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, opt.saving_prefix))
     os.path.join(ckpt_folder, "log_dir")
 
     state_dict = torch.load(ckpt_path)
@@ -165,8 +160,7 @@ def strip(opt, mode="clean"):
 
     if mode == "attack":
         # Testing with perturbed data
-        gauss_smooth = T.GaussianBlur(
-            kernel_size=opt.kernel_size, sigma=opt.sigma)
+        gauss_smooth = T.GaussianBlur(kernel_size=opt.kernel_size, sigma=opt.sigma)
         print("Testing with bd data !!!!")
         inputs, targets = next(iter(test_dataloader))
         inputs = inputs.to(opt.device)
@@ -176,8 +170,7 @@ def strip(opt, mode="clean"):
         bd_inputs = gauss_smooth(bd_inputs)
         bd_inputs = denormalizer(bd_inputs) * 255.0
         bd_inputs = bd_inputs.detach().cpu().numpy()
-        bd_inputs = np.clip(bd_inputs, 0, 255).astype(
-            np.uint8).transpose((0, 2, 3, 1))
+        bd_inputs = np.clip(bd_inputs, 0, 255).astype(np.uint8).transpose((0, 2, 3, 1))
         for index in range(opt.n_test):
             background = bd_inputs[index]
             entropy = strip_detector(background, testset, netC)
@@ -259,8 +252,7 @@ def main():
     min_entropy = min(lists_entropy_trojan + lists_entropy_benign)
 
     # Determining
-    print("Min entropy trojan: {}, Detection boundary: {}".format(
-        min_entropy, opt.detection_boundary))
+    print("Min entropy trojan: {}, Detection boundary: {}".format(min_entropy, opt.detection_boundary))
     if min_entropy < opt.detection_boundary:
         print("A backdoored model\n")
     else:

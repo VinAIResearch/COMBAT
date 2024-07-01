@@ -23,8 +23,7 @@ class Block(nn.Module):
 
         # Expansion
         planes = expand_ratio * in_planes
-        self.conv1 = nn.Conv2d(
-            in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
 
         # Depthwise conv
@@ -45,15 +44,13 @@ class Block(nn.Module):
         self.se2 = nn.Conv2d(se_planes, planes, kernel_size=1)
 
         # Output
-        self.conv3 = nn.Conv2d(
-            planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv3 = nn.Conv2d(planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes)
 
         self.shortcut = nn.Sequential()
         if stride == 1 and in_planes != out_planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, out_planes, kernel_size=1,
-                          stride=1, padding=0, bias=False),
+                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_planes),
             )
 
@@ -78,8 +75,7 @@ class EfficientNet(nn.Module):
     def __init__(self, cfg, num_classes=10):
         super(EfficientNet, self).__init__()
         self.cfg = cfg
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3,
-                               stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.layers = self._make_layers(in_planes=32)
         self.linear = nn.Linear(cfg[-1][1], num_classes)
@@ -90,8 +86,7 @@ class EfficientNet(nn.Module):
             strides = [stride] + [1] * (num_blocks - 1)
             for stride in strides:
                 layers.append(
-                    Block(in_planes, out_planes, kernel_size, stride,
-                          expansion, se_ratio=0.25, drop_rate=0.2)
+                    Block(in_planes, out_planes, kernel_size, stride, expansion, se_ratio=0.25, drop_rate=0.2)
                 )
                 in_planes = out_planes
         return nn.Sequential(*layers)

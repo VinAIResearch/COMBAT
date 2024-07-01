@@ -1,13 +1,13 @@
-from utils.utils import progress_bar
-from utils.dataloader import get_dataloader
-from networks.models import Denormalize, NetC_MNIST3, Normalize
-from classifier_models import *
 import os
 import sys
 
 import torch
 import torchvision
+from classifier_models import PreActResNet18
+from networks.models import Denormalize, NetC_MNIST3, Normalize
 from torch import nn
+from utils.dataloader import get_dataloader
+from utils.utils import progress_bar
 
 
 sys.path.insert(0, "../..")
@@ -51,12 +51,10 @@ class RegressionModel(nn.Module):
             raise Exception("Invalid Dataset")
         # Load pretrained classifier
         mode = opt.saving_prefix
-        ckpt_folder = os.path.join(
-            opt.checkpoints, "{}_clean".format(mode), opt.dataset)
+        ckpt_folder = os.path.join(opt.checkpoints, "{}_clean".format(mode), opt.dataset)
         if not os.path.exists(ckpt_folder):
             os.makedirs(ckpt_folder)
-        ckpt_path = os.path.join(
-            ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
+        ckpt_path = os.path.join(ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
         state_dict = torch.load(ckpt_path)
         classifier.load_state_dict(state_dict["netC"])
         for param in classifier.parameters():
@@ -66,8 +64,7 @@ class RegressionModel(nn.Module):
 
     def _get_denormalize(self, opt):
         if opt.dataset == "cifar10":
-            denormalizer = Denormalize(
-                opt, [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
+            denormalizer = Denormalize(opt, [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             denormalizer = Denormalize(opt, [0.5], [0.5])
         elif opt.dataset == "gtsrb":
@@ -78,8 +75,7 @@ class RegressionModel(nn.Module):
 
     def _get_normalize(self, opt):
         if opt.dataset == "cifar10":
-            normalizer = Normalize(opt, [0.4914, 0.4822, 0.4465], [
-                                   0.247, 0.243, 0.261])
+            normalizer = Normalize(opt, [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
         elif opt.dataset == "mnist":
             normalizer = Normalize(opt, [0.5], [0.5])
         elif opt.dataset == "gtsrb":
@@ -124,8 +120,7 @@ class Recorder:
         print("Initialize cost to {:f}".format(self.cost))
 
     def save_result_to_dir(self, opt):
-        result_dir = os.path.join(
-            opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
+        result_dir = os.path.join(opt.result, "{}_clean".format(opt.saving_prefix), opt.dataset)
         if not os.path.exists(result_dir):
             os.makedirs(result_dir)
         result_dir = os.path.join(result_dir, str(opt.target_label))
@@ -141,8 +136,7 @@ class Recorder:
         path_trigger = os.path.join(result_dir, "trigger.png")
 
         torchvision.utils.save_image(mask_best, path_mask, normalize=True)
-        torchvision.utils.save_image(
-            pattern_best, path_pattern, normalize=True)
+        torchvision.utils.save_image(pattern_best, path_pattern, normalize=True)
         torchvision.utils.save_image(trigger, path_trigger, normalize=True)
 
 
@@ -151,19 +145,16 @@ def train(opt, init_mask, init_pattern):
     test_dataloader = get_dataloader(opt, train=False)
 
     # Build regression model
-    regression_model = RegressionModel(
-        opt, init_mask, init_pattern).to(opt.device)
+    regression_model = RegressionModel(opt, init_mask, init_pattern).to(opt.device)
 
     # Set optimizer
-    optimizerR = torch.optim.Adam(
-        regression_model.parameters(), lr=opt.lr, betas=(0.5, 0.9))
+    optimizerR = torch.optim.Adam(regression_model.parameters(), lr=opt.lr, betas=(0.5, 0.9))
 
     # Set recorder (for recording best result)
     recorder = Recorder(opt)
 
     for epoch in range(opt.epoch):
-        early_stop = train_step(
-            regression_model, optimizerR, test_dataloader, recorder, epoch, opt)
+        early_stop = train_step(regression_model, optimizerR, test_dataloader, recorder, epoch, opt)
         if early_stop:
             break
 
@@ -174,8 +165,7 @@ def train(opt, init_mask, init_pattern):
 
 
 def train_step(regression_model, optimizerR, dataloader, recorder, epoch, opt):
-    print("Epoch {} - Label: {} | {} - {}:".format(epoch,
-          opt.target_label, opt.dataset, opt.attack_mode))
+    print("Epoch {} - Label: {} | {} - {}:".format(epoch, opt.target_label, opt.dataset, opt.attack_mode))
     # Set losses
     cross_entropy = nn.CrossEntropyLoss()
     total_pred = 0
@@ -196,8 +186,7 @@ def train_step(regression_model, optimizerR, dataloader, recorder, epoch, opt):
         inputs = inputs.to(opt.device)
         sample_num = inputs.shape[0]
         total_pred += sample_num
-        target_labels = torch.ones((sample_num), dtype=torch.int64).to(
-            opt.device) * opt.target_label
+        target_labels = torch.ones((sample_num), dtype=torch.int64).to(opt.device) * opt.target_label
         predictions = regression_model(inputs)
 
         loss_ce = cross_entropy(predictions, target_labels)
@@ -207,15 +196,13 @@ def train_step(regression_model, optimizerR, dataloader, recorder, epoch, opt):
         optimizerR.step()
 
         # Record minibatch information to list
-        minibatch_accuracy = torch.sum(torch.argmax(
-            predictions, dim=1) == target_labels).detach() * 100.0 / sample_num
+        minibatch_accuracy = torch.sum(torch.argmax(predictions, dim=1) == target_labels).detach() * 100.0 / sample_num
         loss_ce_list.append(loss_ce.detach())
         loss_reg_list.append(loss_reg.detach())
         loss_list.append(total_loss.detach())
         loss_acc_list.append(minibatch_accuracy)
 
-        true_pred += torch.sum(torch.argmax(predictions,
-                               dim=1) == target_labels).detach()
+        true_pred += torch.sum(torch.argmax(predictions, dim=1) == target_labels).detach()
         progress_bar(batch_idx, len(dataloader))
 
     loss_ce_list = torch.stack(loss_ce_list)
@@ -251,8 +238,7 @@ def train_step(regression_model, optimizerR, dataloader, recorder, epoch, opt):
             else:
                 recorder.early_stop_counter = 0
 
-        recorder.early_stop_reg_best = min(
-            recorder.early_stop_reg_best, recorder.reg_best)
+        recorder.early_stop_reg_best = min(recorder.early_stop_reg_best, recorder.reg_best)
 
         if (
             recorder.cost_down_flag
@@ -280,15 +266,13 @@ def train_step(regression_model, optimizerR, dataloader, recorder, epoch, opt):
 
         if recorder.cost_up_counter >= opt.patience:
             recorder.cost_up_counter = 0
-            print("Up cost from {} to {}".format(recorder.cost,
-                  recorder.cost * recorder.cost_multiplier_up))
+            print("Up cost from {} to {}".format(recorder.cost, recorder.cost * recorder.cost_multiplier_up))
             recorder.cost *= recorder.cost_multiplier_up
             recorder.cost_up_flag = True
 
         elif recorder.cost_down_counter >= opt.patience:
             recorder.cost_down_counter = 0
-            print("Down cost from {} to {}".format(recorder.cost,
-                  recorder.cost / recorder.cost_multiplier_down))
+            print("Down cost from {} to {}".format(recorder.cost, recorder.cost / recorder.cost_multiplier_down))
             recorder.cost /= recorder.cost_multiplier_down
             recorder.cost_down_flag = True
 

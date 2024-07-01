@@ -34,7 +34,7 @@ def create_dir(path_dir):
         base_dir = os.path.join(base_dir, subdir)
         try:
             os.mkdir(base_dir)
-        except:
+        except Exception:
             pass
 
 
@@ -42,11 +42,9 @@ def create_targets_bd(targets, opt):
     if opt.attack_mode == "all2one":
         bd_targets = torch.ones_like(targets) * opt.target_label
     elif opt.attack_mode == "all2all":
-        bd_targets = torch.tensor(
-            [(label + 1) % opt.num_classes for label in targets])
+        bd_targets = torch.tensor([(label + 1) % opt.num_classes for label in targets])
     else:
-        raise Exception(
-            "{} attack mode is not implemented".format(opt.attack_mode))
+        raise Exception("{} attack mode is not implemented".format(opt.attack_mode))
     return bd_targets.to(opt.device)
 
 
@@ -60,8 +58,7 @@ def get_model(opt):
     elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
     if opt.dataset == "imagenet10":
-        netC = ResNet18(num_classes=opt.num_classes,
-                        input_size=opt.input_height).to(opt.device)
+        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
 
     if opt.model != "default":
         netC = C_MAPPING_NAMES[opt.model](
@@ -69,10 +66,8 @@ def get_model(opt):
         ).to(opt.device)
 
     # Optimizer
-    optimizerC = torch.optim.SGD(
-        netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    schedulerC = torch.optim.lr_scheduler.MultiStepLR(
-        optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
+    optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
 
     return netC, optimizerC, schedulerC
 
@@ -110,14 +105,12 @@ def train(netC, optimizerC, schedulerC, train_dl, tf_writer, epoch, opt):
 
         total_sample += bs
         total_loss_ce += loss_ce.detach()
-        total_clean_correct += torch.sum(
-            torch.argmax(total_preds, dim=1) == targets)
+        total_clean_correct += torch.sum(torch.argmax(total_preds, dim=1) == targets)
 
         avg_acc_clean = total_clean_correct * 100.0 / total_sample
         avg_loss_ce = total_loss_ce / total_sample
         progress_bar(
-            batch_idx, len(train_dl), "CE Loss: {:.4f} | Clean Acc: {:.4f}".format(
-                avg_loss_ce, avg_acc_clean)
+            batch_idx, len(train_dl), "CE Loss: {:.4f} | Clean Acc: {:.4f}".format(avg_loss_ce, avg_acc_clean)
         )
 
     # for tensorboard
@@ -142,13 +135,11 @@ def eval(netC, optimizerC, schedulerC, test_dl, best_clean_acc, tf_writer, epoch
 
             # Evaluate Clean
             preds_clean = netC(inputs)
-            total_clean_correct += torch.sum(
-                torch.argmax(preds_clean, 1) == targets)
+            total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
             acc_clean = total_clean_correct * 100.0 / total_sample
 
-            info_string = "Clean Acc: {:.4f} - Best: {:.4f}".format(
-                acc_clean, best_clean_acc)
+            info_string = "Clean Acc: {:.4f} - Best: {:.4f}".format(acc_clean, best_clean_acc)
             progress_bar(batch_idx, len(test_dl), info_string)
 
     # tensorboard
@@ -198,10 +189,8 @@ def main():
     netC, optimizerC, schedulerC = get_model(opt)
 
     mode = opt.saving_prefix
-    opt.ckpt_folder = os.path.join(
-        opt.checkpoints, "{}".format(mode), opt.dataset)
-    opt.ckpt_path = os.path.join(
-        opt.ckpt_folder, "{}_{}.pth.tar".format(opt.dataset, mode))
+    opt.ckpt_folder = os.path.join(opt.checkpoints, "{}".format(mode), opt.dataset)
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, "{}_{}.pth.tar".format(opt.dataset, mode))
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     create_dir(opt.log_dir)
 
@@ -232,8 +221,7 @@ def main():
     for epoch in range(epoch_current, opt.n_iters):
         print("Epoch {}:".format(epoch + 1))
         train(netC, optimizerC, schedulerC, train_dl, tf_writer, epoch, opt)
-        best_clean_acc = eval(netC, optimizerC, schedulerC,
-                              test_dl, best_clean_acc, tf_writer, epoch, opt)
+        best_clean_acc = eval(netC, optimizerC, schedulerC, test_dl, best_clean_acc, tf_writer, epoch, opt)
 
 
 if __name__ == "__main__":

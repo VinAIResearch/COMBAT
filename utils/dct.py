@@ -27,8 +27,7 @@ def dct(x, norm="ortho"):
 
     Vc = dct_fft_impl(v)
 
-    k = -torch.arange(N, dtype=x.dtype,
-                      device=x.device)[None, :] * np.pi / (2 * N)
+    k = -torch.arange(N, dtype=x.dtype, device=x.device)[None, :] * np.pi / (2 * N)
     W_r = torch.cos(k)
     W_i = torch.sin(k)
 
@@ -63,8 +62,7 @@ def idct(X, norm="ortho"):
         X_v[:, 0] *= np.sqrt(N) * 2
         X_v[:, 1:] *= np.sqrt(N / 2) * 2
 
-    k = torch.arange(x_shape[-1], dtype=X.dtype,
-                     device=X.device)[None, :] * np.pi / (2 * N)
+    k = torch.arange(x_shape[-1], dtype=X.dtype, device=X.device)[None, :] * np.pi / (2 * N)
     W_r = torch.cos(k)
     W_i = torch.sin(k)
 

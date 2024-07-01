@@ -1,8 +1,3 @@
-from utils.utils import progress_bar
-from utils.dct import dct_2d, idct_2d
-from utils.dataloader import get_dataloader
-from networks.models import UnetGenerator
-from classifier_models import PreActResNet18, ResNet18
 import copy
 import os
 import sys
@@ -10,7 +5,12 @@ import sys
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
+from classifier_models import PreActResNet18, ResNet18
 from config import get_arguments
+from networks.models import UnetGenerator
+from utils.dataloader import get_dataloader
+from utils.dct import dct_2d, idct_2d
+from utils.utils import progress_bar
 
 
 sys.path.insert(0, "../..")
@@ -20,11 +20,9 @@ def create_targets_bd(targets, opt):
     if opt.attack_mode == "all2one":
         bd_targets = torch.ones_like(targets) * opt.target_label
     elif opt.attack_mode == "all2all":
-        bd_targets = torch.tensor(
-            [(label + 1) % opt.num_classes for label in targets])
+        bd_targets = torch.tensor([(label + 1) % opt.num_classes for label in targets])
     else:
-        raise Exception(
-            "{} attack mode is not implemented".format(opt.attack_mode))
+        raise Exception("{} attack mode is not implemented".format(opt.attack_mode))
     return bd_targets.to(opt.device)
 
 
@@ -69,8 +67,7 @@ def eval(netC, netG, test_dl, opt):
             total_sample += bs
             # Evaluate Clean
             preds_clean = netC(inputs)
-            total_correct_clean += torch.sum(
-                torch.argmax(preds_clean, 1) == targets)
+            total_correct_clean += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
             # Evaluate Backdoor
             noise_bd = netG(inputs)
@@ -79,14 +76,12 @@ def eval(netC, netG, test_dl, opt):
             inputs_bd = gauss_smooth(inputs_bd)
             targets_bd = create_targets_bd(targets, opt)
             preds_bd = netC(inputs_bd)
-            total_correct_bd += torch.sum(torch.argmax(preds_bd, 1)
-                                          == targets_bd)
+            total_correct_bd += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             acc_clean = total_correct_clean * 100.0 / total_sample
             acc_bd = total_correct_bd * 100.0 / total_sample
 
-        progress_bar(batch_idx, len(
-            test_dl), "Acc Clean: {:.3f} | Acc Bd: {:.3f}".format(acc_clean, acc_bd))
+        progress_bar(batch_idx, len(test_dl), "Acc Clean: {:.3f} | Acc Bd: {:.3f}".format(acc_clean, acc_bd))
     return acc_clean, acc_bd
 
 
@@ -181,8 +176,7 @@ def main():
                 pruning_mask.shape[0], pruning_mask.shape[0] - num_pruned, (3, 3), stride=1, padding=1, bias=False
             )
             if opt.dataset == "cifar10":
-                net_pruned.linear = nn.Linear(
-                    pruning_mask.shape[0] - num_pruned, opt.num_classes)
+                net_pruned.linear = nn.Linear(pruning_mask.shape[0] - num_pruned, opt.num_classes)
 
                 # Re-assigning weight to the pruned net
                 for name, module in net_pruned._modules.items():
@@ -190,15 +184,13 @@ def main():
                         module[1].conv2.weight.data = netC.layer4[1].conv2.weight.data[pruning_mask]
                         module[1].ind = pruning_mask
                     elif "linear" == name:
-                        module.weight.data = netC.linear.weight.data[:,
-                                                                     pruning_mask]
+                        module.weight.data = netC.linear.weight.data[:, pruning_mask]
                         module.bias.data = netC.linear.bias.data
                     else:
                         continue
 
             elif opt.dataset == "celeba" or opt.dataset == "imagenet10":
-                net_pruned.linear = nn.Linear(
-                    4 * (pruning_mask.shape[0] - num_pruned), opt.num_classes)
+                net_pruned.linear = nn.Linear(4 * (pruning_mask.shape[0] - num_pruned), opt.num_classes)
 
                 # Re-assigning weight to the pruned net
                 for name, module in net_pruned._modules.items():
@@ -213,8 +205,7 @@ def main():
 
                     elif "linear" == name:
                         converted_mask = convert(pruning_mask)
-                        module.weight.data = netC.linear.weight.data[:,
-                                                                     converted_mask]
+                        module.weight.data = netC.linear.weight.data[:, converted_mask]
                         module.bias.data = netC.linear.bias.data
                     else:
                         continue

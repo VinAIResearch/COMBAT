@@ -20,7 +20,7 @@ def create_dir(path_dir):
         base_dir = os.path.join(base_dir, subdir)
         try:
             os.mkdir(base_dir)
-        except:
+        except Exception:
             pass
 
 
@@ -28,11 +28,9 @@ def create_targets_bd(targets, opt):
     if opt.attack_mode == "all2one":
         bd_targets = torch.ones_like(targets) * opt.target_label
     elif opt.attack_mode == "all2all":
-        bd_targets = torch.tensor(
-            [(label + 1) % opt.num_classes for label in targets])
+        bd_targets = torch.tensor([(label + 1) % opt.num_classes for label in targets])
     else:
-        raise Exception(
-            "{} attack mode is not implemented".format(opt.attack_mode))
+        raise Exception("{} attack mode is not implemented".format(opt.attack_mode))
     return bd_targets.to(opt.device)
 
 
@@ -72,24 +70,17 @@ def get_model(opt):
 
     if opt.dataset == "cifar10":
         netC = PreActResNet18().to(opt.device)
-        clean_model = PreActResNet18().to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     elif opt.dataset == "celeba":
         netC = ResNet18(num_classes=opt.num_classes).to(opt.device)
-        clean_model = ResNet18(num_classes=opt.num_classes).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
     elif opt.dataset == "imagenet10":
-        netC = ResNet18(num_classes=opt.num_classes,
-                        input_size=opt.input_height).to(opt.device)
-        clean_model = ResNet18(num_classes=opt.num_classes,
-                               input_size=opt.input_height).to(opt.device)
+        netC = ResNet18(num_classes=opt.num_classes, input_size=opt.input_height).to(opt.device)
         netG = UnetGenerator(opt).to(opt.device)
 
     # Optimizer
-    optimizerC = torch.optim.SGD(
-        netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    schedulerC = torch.optim.lr_scheduler.MultiStepLR(
-        optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
+    optimizerC = torch.optim.SGD(netC.parameters(), opt.lr_C, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    schedulerC = torch.optim.lr_scheduler.MultiStepLR(optimizerC, opt.schedulerC_milestones, opt.schedulerC_lambda)
     return netC, optimizerC, schedulerC, netG
 
 
@@ -110,8 +101,7 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
     transforms = PostTensorTransform(opt)
 
     for batch_idx, (inputs, targets, poisoned) in enumerate(train_dl):
-        inputs, targets, poisoned = inputs.to(opt.device), targets.to(
-            opt.device), poisoned.to(opt.device)
+        inputs, targets, poisoned = inputs.to(opt.device), targets.to(opt.device), poisoned.to(opt.device)
         bs = inputs.shape[0]
         bd_targets = create_targets_bd(targets, opt)
 
@@ -121,7 +111,7 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         optimizerC.zero_grad()
         # Create backdoor data
         trg_ind = poisoned.nonzero()[:, 0]
-        ntrg_ind = (poisoned == False).nonzero()[:, 0]
+        ntrg_ind = (poisoned is False).nonzero()[:, 0]
         num_bd = trg_ind.shape[0]
         # if num_bd < 1:
         #    continue
@@ -131,8 +121,7 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
         inputs_bd = create_inputs_bd(inputs_toChange, netG, opt)
         total_inputs = torch.cat([inputs_bd, inputs[ntrg_ind]], dim=0)
         total_inputs = transforms(total_inputs)
-        total_targets = torch.cat(
-            [bd_targets[trg_ind], targets[ntrg_ind]], dim=0)
+        total_targets = torch.cat([bd_targets[trg_ind], targets[ntrg_ind]], dim=0)
         total_preds = netC(total_inputs)
 
         loss_ce = criterion_CE(total_preds, total_targets)
@@ -144,14 +133,12 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
 
         total_sample += bs
         total_loss_ce += loss_ce.detach()
-        total_clean_correct += torch.sum(
-            torch.argmax(total_preds, dim=1) == total_targets)
+        total_clean_correct += torch.sum(torch.argmax(total_preds, dim=1) == total_targets)
 
         avg_acc_clean = total_clean_correct * 100.0 / total_sample
         avg_loss_ce = total_loss_ce / total_sample
         progress_bar(
-            batch_idx, len(train_dl), "CE Loss: {:.4f} | Clean Acc: {:.4f}".format(
-                avg_loss_ce, avg_acc_clean)
+            batch_idx, len(train_dl), "CE Loss: {:.4f} | Clean Acc: {:.4f}".format(avg_loss_ce, avg_acc_clean)
         )
 
         # Save image for debugging
@@ -166,8 +153,7 @@ def train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt):
 
     # for tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars(
-            "Clean Accuracy", {"Clean": avg_acc_clean}, epoch)
+        tf_writer.add_scalars("Clean Accuracy", {"Clean": avg_acc_clean}, epoch)
         tf_writer.add_image("Images", grid, global_step=epoch)
 
     schedulerC.step()
@@ -208,8 +194,7 @@ def eval(
             preds_clean = netC(inputs)
 
             total_clean_sample += len(inputs)
-            total_clean_correct += torch.sum(
-                torch.argmax(preds_clean, 1) == targets)
+            total_clean_correct += torch.sum(torch.argmax(preds_clean, 1) == targets)
 
             # Evaluate Backdoor
             ntrg_ind = (targets != opt.target_label).nonzero()[:, 0]
@@ -217,14 +202,12 @@ def eval(
             targets_toChange = targets[ntrg_ind]
             noise_bd = netG(inputs_toChange)
             # inputs_bd = torch.clamp(inputs_toChange + noise_bd * opt.noise_rate, -1, 1)
-            inputs_bd = create_inputs_bd_from_noise(
-                inputs_toChange, noise_bd, opt)
+            inputs_bd = create_inputs_bd_from_noise(inputs_toChange, noise_bd, opt)
             targets_bd = create_targets_bd(targets_toChange, opt)
             preds_bd = netC(inputs_bd)
 
             total_bd_sample += len(ntrg_ind)
-            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1)
-                                          == targets_bd)
+            total_bd_correct += torch.sum(torch.argmax(preds_bd, 1) == targets_bd)
 
             # Evaluate Cross-trigger accuracy
             noise_bd2 = netG(inputs2)
@@ -236,8 +219,7 @@ def eval(
             preds_cross_ntrg = preds_cross[ntrg_ind]
             targets_ntrg = targets[ntrg_ind]
 
-            total_cross_correct += torch.sum(
-                torch.argmax(preds_cross_ntrg, 1) == targets_ntrg)
+            total_cross_correct += torch.sum(torch.argmax(preds_cross_ntrg, 1) == targets_ntrg)
 
             acc_clean = total_clean_correct * 100.0 / total_clean_sample
             acc_bd = total_bd_correct * 100.0 / total_bd_sample
@@ -250,8 +232,7 @@ def eval(
 
     # tensorboard
     if not epoch % 1:
-        tf_writer.add_scalars(
-            "Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "Cross": acc_cross}, epoch)
+        tf_writer.add_scalars("Test Accuracy", {"Clean": acc_clean, "Bd": acc_bd, "Cross": acc_cross}, epoch)
 
     # Save checkpoint
     if acc_clean > best_clean_acc:
@@ -306,16 +287,13 @@ def main():
 
     # Load pretrained model
     mode = opt.saving_prefix
-    opt.ckpt_folder = os.path.join(
-        opt.checkpoints, "{}_clean".format(mode), opt.dataset)
-    opt.ckpt_path = os.path.join(
-        opt.ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
+    opt.ckpt_folder = os.path.join(opt.checkpoints, "{}_clean".format(mode), opt.dataset)
+    opt.ckpt_path = os.path.join(opt.ckpt_folder, "{}_{}_clean.pth.tar".format(opt.dataset, mode))
     opt.log_dir = os.path.join(opt.ckpt_folder, "log_dir")
     create_dir(opt.log_dir)
 
     load_path = os.path.join(
-        opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(
-            opt.dataset, opt.load_checkpoint)
+        opt.checkpoints, opt.load_checkpoint, opt.dataset, "{}_{}.pth.tar".format(opt.dataset, opt.load_checkpoint)
     )
     if not os.path.exists(load_path):
         print("Error: {} not found".format(load_path))
@@ -331,8 +309,7 @@ def main():
     epoch_current = 0
     for epoch in range(epoch_current, opt.n_iters):
         print("Epoch {}:".format(epoch + 1))
-        train(netC, optimizerC, schedulerC, netG,
-              train_dl, tf_writer, epoch, opt)
+        train(netC, optimizerC, schedulerC, netG, train_dl, tf_writer, epoch, opt)
         best_clean_acc, best_bd_acc, best_cross_acc = eval(
             netC,
             optimizerC,

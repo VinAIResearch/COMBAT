@@ -31,7 +31,12 @@ Run command
 ```
 $ python train_clean_classifier.py --dataset <datasetName> --saving_prefix <cleanModelPrefix>
 ```
-The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
+
+where the parameters are as following:
+- `dataset`: name of the dataset used for training (`cifar10` | `imagenet10` | `celeba`)
+- `saving_prefix`: the prefix for saving the trained model checkpoint
+  
+The trained checkpoint of the clean model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
 
 
 ## Training trigger generator and surrogate model 

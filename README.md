@@ -34,7 +34,7 @@ $ python train_clean_classifier.py --dataset <datasetName> --saving_prefix <clea
 
 where the parameters are as following:
 - `dataset`: name of the dataset used for training (`cifar10` | `imagenet10` | `celeba`)
-- `saving_prefix`: the prefix for saving the trained model checkpoint
+- `saving_prefix`: prefix for saving the trained clean model checkpoint
   
 The trained checkpoint of the clean model should be saved at the path `checkpoints\<cleanModelPrefix>\<datasetName>\<datasetName>_<cleanModelPrefix>.pth.tar.`
 
@@ -46,9 +46,11 @@ $ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise
 ``` 
 
 where the parameters are as following:
-- `dataset`: `cifar10` | `imagenet10` | `celeba`
+- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
+- `saving_prefix`: prefix for saving the trained generator and surrogate model checkpoint
+- `load_checkpoint_clean`: prefix of the trained clean model checkpoint
 
 The trained checkpoint of the generator and surrogate model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
 

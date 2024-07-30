@@ -59,14 +59,26 @@ Run command
 ```
 $ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoint>
 ```
-`load_checkpoint`: trained generator checkpoint folder name.
+- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
+- `pc`: proportion of the target class data to poison on a 0-to-1 scale
+- `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
+- `saving_prefix`: prefix for saving the trained victim model checkpoint
+- `load_checkpoint`: trained generator checkpoint folder name
 
 The trained checkpoint of the victim model should be saved at the path `checkpoints\<savingPrefix>_clean\<datasetName>\<datasetName>_<savingPrefix>_clean.pth.tar.`
+
 ## Evaluate victim model
 Run command
 ```
 $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix> --load_checkpoint <trainedCheckpoint>
 ```
+- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
+- `pc`: proportion of the target class data to poison on a 0-to-1 scale
+- `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
+- `saving_prefix`: prefix for saving the trained victim model checkpoint
+- `load_checkpoint_clean`: trained clean model checkpoint folder name
+- `load_checkpoint`: trained generator checkpoint folder name
+  
 ## Sample run
 ```
 $ python train_clean_classifier.py --dataset cifar10 --saving_prefix classifier_clean

@@ -46,7 +46,7 @@ $ python train_generator.py --dataset <datasetName> --pc <poisoningRate> --noise
 ``` 
 
 where the parameters are as following:
-- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
+- `dataset`: name of the dataset used for training (`cifar10` | `imagenet10` | `celeba`)
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
 - `saving_prefix`: prefix for saving the trained generator and surrogate model checkpoint
@@ -59,7 +59,7 @@ Run command
 ```
 $ python train_victim.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint <trainedCheckpoint>
 ```
-- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
+- `dataset`: name of the dataset used for training (`cifar10` | `imagenet10` | `celeba`)
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
 - `saving_prefix`: prefix for saving the trained victim model checkpoint
@@ -72,7 +72,7 @@ Run command
 ```
 $ python eval.py --dataset <datasetName> --pc <poisoningRate> --noise_rate <triggerStrength> --saving_prefix <savingPrefix> --load_checkpoint_clean <cleanModelPrefix> --load_checkpoint <trainedCheckpoint>
 ```
-- `dataset`: name of the dataset used for training (cifar10 | imagenet10 | celeba)
+- `dataset`: name of the dataset used for training (`cifar10` | `imagenet10` | `celeba`)
 - `pc`: proportion of the target class data to poison on a 0-to-1 scale
 - `noise_rate`: strength/amplitude of the backdoor trigger on a 0-to-1 scale
 - `saving_prefix`: prefix for saving the trained victim model checkpoint
